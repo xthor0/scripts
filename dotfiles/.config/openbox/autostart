@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# and away we go!
+
+nitrogen --restore &
+compton -b
+tint2 &
+
+conky &
+
+# fix touchpad
+xinput set-prop 12 "libinput Click Method Enabled" 0 1
+
+# this needs help, I think - volumeicon probably won't start 
+# throws an error about not being able to connect to pulseaudio I think
+sleep 2
+volumeicon &
+xfce4-power-manager &
+
+# screen locker
+xautolock -time 10 -locker ~/git/i3lock-fancy/lock &
+xss-lock ~/git/i3lock-fancy/lock &
