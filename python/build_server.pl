@@ -21,7 +21,7 @@ from salt.log.setup import setup_console_logger
 setup_console_logger(log_level='info')
 
 client = salt.cloud.CloudClient('/etc/salt/cloud')
-spec = { 'disk': { 'hard disk 2': {'size': '100'} } }
+spec = {'devices':{'disk':{'Hard disk 2':{'size': 100}}}}
 
 # saved in case I want to set grains here later...
 #spec = { 'disk': { 'hard disk 2': {'size': '100'} }
