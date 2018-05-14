@@ -119,13 +119,14 @@ class PLServer(object):
         # I *THINK* this will give me the IP address, and if it matches what we have assigned, it SHOULD mean the VM
         # has been provisioned and is ready to rock. It would be nice if there was a retcode, but... no luck
         try:
-            if s[self.name]['private_ips'][0] == self.ipaddr:
-                self.deployed = True
+            if s[self.name]['hostname'].startswith(self.name):
+                print("Minion {} deployed successfully.".format(self.name))
             else:
-                self.deployed = False
-        except IndexError:
+                print("Minion {} deployed, but Salt hostname doesn't match minion ID.".format(self.name))
+            self.deployed = True
+        except KeyError:
+            print("Minion {} did not deploy successfully.".format(self.name))
             self.deployed = False
-            return
 
     def get_server(self, name):
         """ get server details from Salt """
