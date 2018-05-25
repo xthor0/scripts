@@ -22,7 +22,7 @@ find . -maxdepth 1 -type f -iname "*.mkv" | while read inputfile; do
 	echo "Processing ${inputfile} to $(pwd)/encode/${newfile}.m4v..."
 	start=$(date +%s)
 	#echo | HandBrakeCLI -Z 'High Profile' -m -i "${inputfile}" -o "encode/${newfile}.m4v" 2> $currentLog
-	echo | HandBrakeCLI -Z 'Apple 1080p30 Surround' -m -i "${inputfile}" -o "encode/${newfile}.m4v" 2> $currentLog
+	echo | HandBrakeCLI -Z 'HQ 1080p30 Surround' -m -i "${inputfile}" -o "encode/${newfile}.m4v" 2> $currentLog
 	end=$(date +%s)
 	cat $currentLog >> $batchLog
 	diff=$(($start-$end))
