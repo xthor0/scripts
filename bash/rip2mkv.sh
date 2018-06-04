@@ -7,7 +7,7 @@ makemkvcon --progress=-stdout -r info dev:/dev/sr0 > $discinfo
 
 # get disc title
 title=$(cat $discinfo | grep '^DRV:0' | cut -d \, -f 6 | tr -d \")
-directory="/storage/new_rips/${title}"
+directory="/storage/rips/${title}"
 
 # delete temp file
 rm -f $discinfo
@@ -34,7 +34,8 @@ fi
 pushd "${directory}"
 
 # begin ripping disk
-makemkvcon --progress=-stdout mkv dev:/dev/sr0 all .
+# cribbed this from here: https://gist.github.com/tacofumi/3041eac2f59da7a775c6
+makemkvcon --progress=-stdout --minlength=4800 -r --decrypt --directio=true mkv dev:/dev/sr0 all .
 endDate=$(date)
 
 #$HOME/Dropbox/projects/scripts/prowl.pl -apikey=fb18cb558102482e883ac76ba05a3c1b00212e96 -application=MakeMKV -event="MakeMKV rip completed" -notification="Started: $startDate :: Ended: $endDate" -priority=-2
