@@ -1,0 +1,43 @@
+Vagrant.configure("2") do |config|
+
+  ## I may forget - the intent of this Vagrantfile is to set up a Salt master
+	# responding to minions on the supplied IP address
+	# I need to figure out how to make the minions check in to the master and get the master to save
+	# the keys. or, make the master auto-accept all keys :)	
+  ## Choose your base box
+  config.vm.box = "geerlingguy/centos7"
+
+  config.vm.define "master" do |master|
+    ## Connect to host's network
+    master.vm.network "private_network", ip: "192.168.221.10"
+    
+    ## Present guest network ports to host's network
+    #master.vm.network "forwarded_port", guest: 4505, host: 4505, protocol: "tcp"
+    #master.vm.network "forwarded_port", guest: 4506, host: 4506, protocol: "tcp"
+    
+    ## Mount Salt file root
+    #master.vm.synced_folder "states/", "/srv/salt/states/"
+    #master.vm.synced_folder "pillars/", "/srv/salt/pillars/"
+    #master.vm.synced_folder "~/Documents/git/chg/salt/states/", "/srv/salt/states/"
+    #master.vm.synced_folder "~/Documents/git/chg/salt/pillars/", "/srv/salt/pillars/"
+    #master.vm.synced_folder "formulae/", "/srv/salt/formulae/"
+    #master.vm.synced_folder "configs/", "/srv/salt/configs/"
+    
+      #yum install -y salt salt-master --disablerepo=epel
+      #yum install -y python-pygit2 git man-pages
+
+    ## If connected to public_network, uncomment this block to automatically install Salt
+    master.vm.provision "shell", inline: <<-EOF
+      sed -i 's/enabled=1/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+      yum -y install epel-release
+      yum -y install wget screen rsync vim-enhanced bind-utils net-tools bash-completion bash-completion-extras
+      hostnamectl set-hostname master.localdev
+      EOF
+    
+    # Some states needs more memory or CPU to run the apps. Uncomment below if needed.
+    master.vm.provider :virtualbox do |vb|
+      vb.customize ["modifyvm", :id, "--memory", "2048", "--cpus", "1"]
+    end
+  
+  end
+end
