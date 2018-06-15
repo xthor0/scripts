@@ -26,3 +26,4 @@ export LSCOLORS=gxBxhxDxfxhxhxhxhxcxcx
 alias ls="ls -G"
 alias npw="pwgen 8 1"
 alias sshnosave="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+alias cp='gcp'
