@@ -1,0 +1,195 @@
+Vagrant.configure("2") do |config|
+  
+  ## Choose your base box
+  config.vm.box = "geerlingguy/centos7"
+
+  #------------
+  # Local Master
+  #------------
+  
+  config.vm.define "master" do |master|
+    ## Connect to host's network
+    master.vm.network "public_network"
+    
+    ## Present guest network ports to host's network
+    master.vm.network "forwarded_port", guest: 4505, host: 4505, protocol: "tcp"
+    master.vm.network "forwarded_port", guest: 4506, host: 4506, protocol: "tcp"
+    
+    ## Mount Salt file root
+    master.vm.synced_folder "states/", "/srv/salt/states/"
+    master.vm.synced_folder "pillars/", "/srv/salt/pillars/"
+    #master.vm.synced_folder "~/Documents/git/chg/salt/states/", "/srv/salt/states/"
+    #master.vm.synced_folder "~/Documents/git/chg/salt/pillars/", "/srv/salt/pillars/"
+    master.vm.synced_folder "formulae/", "/srv/salt/formulae/"
+    master.vm.synced_folder "configs/", "/srv/salt/configs/"
+    
+      #yum install -y salt salt-master --disablerepo=epel
+      #yum install -y python-pygit2 git man-pages
+
+    ## If connected to public_network, uncomment this block to automatically install Salt
+    master.vm.provision "shell", inline: <<-EOF
+      sed -i 's/enabled=1/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+      yum install -y https://repo.saltstack.com/yum/redhat/salt-repo-latest-1.el7.noarch.rpm
+      yum install -y salt salt-master man-pages
+      mv /etc/salt/master /etc/salt/master.stock
+      ln -s /srv/salt/configs/master /etc/salt/master
+      ssh -o "StrictHostKeyChecking no" -o PasswordAuthentication=no -p 7999 ops.chgit.com
+      hostnamectl set-hostname master.localdev
+      systemctl enable salt-master.service
+      systemctl start salt-master.service
+      EOF
+      # note: ssh-keyscan will not automatically create known_hosts if it does not already exist
+  end
+
+  #------------
+  # Local Minion
+  #------------
+  
+  config.vm.define "minion" do |minion|
+    ## Connect to host's network
+    minion.vm.network "public_network"
+
+    minion.vm.synced_folder "configs/", "/srv/salt/configs/"
+    
+    ## If connected to public_network, uncomment this block to automatically install Salt
+    minion.vm.provision "shell", inline: <<-EOF
+      sed -i 's/enabled=1/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+      yum install -y https://repo.saltstack.com/yum/redhat/salt-repo-latest-1.el7.noarch.rpm
+      yum clean expire-cache
+      yum install -y salt salt-minion --disablerepo=epel
+      systemctl enable salt-minion.service
+      systemctl start salt-minion.service
+      mv /etc/salt/minion /etc/salt/minion.stock
+      ln -s /srv/salt/configs/minion /etc/salt/minion
+      hostnamectl set-hostname minion.localdev
+      EOF
+  end
+
+  #------------
+  # Local Masterless Minion - Uses local dev states, pillars, formulae, etc.
+  #------------
+  
+  config.vm.define "masterless_minion" do |masterless_minion|
+    #masterless_minion.vm.network "public_network"
+
+    ### Mount Salt file root
+    masterless_minion.vm.synced_folder "states/", "/srv/salt/states/"
+    masterless_minion.vm.synced_folder "pillars/", "/srv/salt/pillars/"
+    masterless_minion.vm.synced_folder "formulae/", "/srv/salt/formulae/"
+    masterless_minion.vm.synced_folder "configs/", "/srv/salt/configs/"
+    
+    masterless_minion.vm.provision "shell", inline: <<-EOF
+      # Disable IPv6
+      echo 'net.ipv6.conf.all.disable_ipv6 = 1' >> /etc/sysctl.conf
+      /sbin/sysctl -p
+      # Disable Fastest Mirror YUM plugin
+      sed -i 's/enabled=1/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+      # Install EPEL repo
+      yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      # Install requisites for Salt as well some generic useful packages
+      yum install -y python-pygit2 libgit2 git man-pages nano telnet
+      # Preload Stash/Bitbucket's public SSH key
+      ssh -o "StrictHostKeyChecking no" -o PasswordAuthentication=no -p 7999 ops.chgit.com
+      # Bug in FIPS mode, https://github.com/Legrandin/pycryptodome/issues/64, https://repo.saltstack.com/2016.11.html#rhel
+      # Install Salt repo
+      yum install -y https://repo.saltstack.com/yum/redhat/salt-repo-2016.11-2.el7.noarch.rpm
+      # Expire YUM cache
+      yum clean expire-cache
+      # Install Salt
+      yum install -y salt salt-minion-0:2016.11.9-2.el7.noarch
+      # Move default Salt Minion config file out of way
+      mv /etc/salt/minion /etc/salt/minion.stock
+      # Link new Salt Minion config to where Salt will look for it
+      ln -s /srv/salt/configs/masterless_minion /etc/salt/minion
+      # Set local hostname
+      hostnamectl set-hostname minion.localdev
+      # Set Salt Minion to start at reboot
+      systemctl enable salt-minion.service
+      # Start Salt Minion service
+      systemctl start salt-minion.service
+      # Set some local Salt grains
+      salt-call grains.set env dev
+      salt-call grains.append roles localdev
+      salt-call mine.update
+      EOF
+
+    ### Provision masterless_minion via Salt
+    #masterless_minion.vm.provision :salt do |salt|
+    #  salt.masterless = true
+    #  salt.minion_config = "configs/masterless_minion"
+    #  salt.run_highstate = false
+    #  salt.install_type = "stable"
+    #end
+
+    # Some states needs more memory or CPU to run the apps. Uncomment below if needed.
+    masterless_minion.vm.provider :virtualbox do |vb|
+      vb.customize ["modifyvm", :id, "--memory", "4096", "--cpus", "2"]
+    end
+
+  end
+
+  #------------
+  # Local Masterless Minion - Uses local copy of states checked into Git repo
+  #------------
+  
+  config.vm.define "masterless_minion_repo" do |masterless_minion_repo|
+    #masterless_minion_repo.vm.network "public_network"
+    masterless_minion_repo.vm.network "private_network", type: "dhcp"
+    # Host running Vagrant is likely 10.0.2.2
+
+    ### Mount Salt file root
+    masterless_minion_repo.vm.synced_folder "~/Documents/git/chg/salt/states/", "/srv/salt/states/dev/"
+    masterless_minion_repo.vm.synced_folder "pillars/", "/srv/salt/pillars/"
+    masterless_minion_repo.vm.synced_folder "formulae/", "/srv/salt/formulae/"
+    masterless_minion_repo.vm.synced_folder "configs/", "/srv/salt/configs/"
+    masterless_minion_repo.vm.synced_folder "~/Documents/git/chg/salt/modules/", "/srv/salt/_modules/"
+    
+    masterless_minion_repo.vm.provision "shell", inline: <<-EOF
+      # Disable IPv6
+      echo 'net.ipv6.conf.all.disable_ipv6 = 1' >> /etc/sysctl.conf
+      /sbin/sysctl -p
+      # Disable Fastest Mirror YUM plugin
+      sed -i 's/enabled=1/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
+      # Install EPEL repo
+      yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      # Install requisites for Salt as well some generic useful packages
+      yum install -y python-pygit2 libgit2 git man-pages nano telnet
+      # Preload Stash/Bitbucket's public SSH key
+      ssh -o "StrictHostKeyChecking no" -o PasswordAuthentication=no -p 7999 ops.chgit.com
+      # Bug in FIPS mode, https://github.com/Legrandin/pycryptodome/issues/64, https://repo.saltstack.com/2016.11.html#rhel
+      # Install Salt repo
+      yum install -y https://repo.saltstack.com/yum/redhat/salt-repo-2016.11-2.el7.noarch.rpm
+      # Expire YUM cache
+      yum clean expire-cache
+      # Install Salt
+      yum install -y salt salt-minion-0:2016.11.9-2.el7.noarch
+      # Move default Salt Minion config file out of way
+      mv /etc/salt/minion /etc/salt/minion.stock
+      # Link new Salt Minion config to where Salt will look for it
+      ln -s /srv/salt/configs/masterless_minion_repo /etc/salt/minion
+      # Set local hostname
+      hostnamectl set-hostname minion.localdev
+      # Set Salt Minion to start at reboot
+      systemctl enable salt-minion.service
+      # Start Salt Minion service
+      systemctl start salt-minion.service
+      # Set some local Salt grains
+      salt-call grains.set env dev
+      salt-call grains.append roles localdev
+      EOF
+
+    ### Provision masterless_minion_repo via Salt
+    #masterless_minion_repo.vm.provision :salt do |salt|
+    #  salt.masterless = true
+    #  salt.minion_config = "configs/masterless_minion_repo"
+    #  salt.run_highstate = false
+    #  salt.install_type = "stable"
+    #end
+
+    # Some states needs more memory or CPU to run the apps. Uncomment below if needed.
+    masterless_minion_repo.vm.provider :virtualbox do |vb|
+      vb.customize ["modifyvm", :id, "--memory", "4096", "--cpus", "2"]
+    end
+  
+  end
+end
