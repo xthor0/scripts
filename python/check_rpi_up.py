@@ -7,6 +7,7 @@ import httplib
 import urllib
 from platform import system as system_name  # Returns the system/OS name
 from subprocess import call as system_call  # Execute a shell command
+import subprocess
 
 
 def ping(host):
@@ -16,7 +17,7 @@ def ping(host):
     """
 
     # Ping command count option as function of OS
-    param = '-n' if system_name().lower()=='windows' else '-c'
+    param = '-n' if system_name().lower() == 'windows' else '-c'
 
     # Building the command. Ex: "ping -c 1 google.com"
     command = ['ping', param, '1', host]
@@ -30,13 +31,26 @@ start_time = datetime.now()
 
 # loop till status changes
 while True:
-    print('Pinging 10.200.105.106/24...')
-    result = ping('10.200.105.106')
-    if result is not True:
+    try:
+        print('{} : Pinging 10.200.105.106/24...'.format(datetime.now()))
+        response = subprocess.check_output(
+            ['ping', '-c', '1', '-w', '1', '10.200.105.106'],
+            stderr=subprocess.STDOUT,  # get all output
+            universal_newlines=True  # return string not bytes
+        )
+        print("Success! Sleeping 5 seconds...")
+        time.sleep(5)
+    except subprocess.CalledProcessError:
+        response = None
         print('Ping failed!')
         break
-    print("Sleeping 5...")
-    time.sleep(5)
+
+    # result = ping('10.200.105.106')
+    #if result is not True:
+    #    print('Ping failed!')
+    #    break
+    #print("Sleeping 5...")
+    #time.sleep(5)
 
 # calculate time spent running
 time_elapsed = datetime.now() - start_time
