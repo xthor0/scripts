@@ -1,0 +1,36 @@
+consul:
+  container_name: consul.server
+  command: agent -server -bind 0.0.0.0 -client 0.0.0.0 -bootstrap-expect=1
+  image: consul:latest
+  volumes:
+    - ./etc/consul.server/config:/consul/config
+  ports:
+    - "9300:9300"
+    - "9500:9500"
+    - "9600:9600/udp"
+
+vault:
+  container_name: vault.server
+  image: vault
+  ports:
+    - "8200:8200"
+  volumes:
+    - ./etc/vault.server/config:/mnt/vault/config
+    - ./etc/vault.server/data:/mnt/vault/data
+    - ./etc/vault.server/logs:/mnt/vault/logs
+  cap_add:
+    - IPC_LOCK
+  environment:
+    - VAULT_LOCAL_CONFIG={"backend":{"consul":{"address":"${LOCAL_IP}:9500","advertise_addr":"http://${LOCAL_IP}", "path":"vault/"}},"listener":{"tcp":{"address":"0.0.0.0:8200","tls_disable":1}}}
+  command: server
+
+bash_test:
+  container_name: bash.test
+  image: bash.test
+  environment:
+    - CONSUL_HTTP_ADDR=${LOCAL_IP}:9500
+    - VAULT_ADDR=http://${LOCAL_IP}:8200
+  volumes:
+    - ./etc/bash.test/data:/mnt/data
+  command: tail -f /dev/null
+
