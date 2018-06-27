@@ -35,7 +35,9 @@ pushd "${directory}"
 
 # begin ripping disk
 # cribbed this from here: https://gist.github.com/tacofumi/3041eac2f59da7a775c6
-makemkvcon --progress=-stdout --minlength=4800 -r --decrypt --directio=true mkv dev:/dev/sr0 all .
+# 4800s is too long for TV shows, found out the hard way...
+#makemkvcon --progress=-stdout --minlength=4800 -r --decrypt --directio=true mkv dev:/dev/sr0 all .
+makemkvcon --progress=-stdout --minlength=600 -r --decrypt --directio=true mkv dev:/dev/sr0 all .
 endDate=$(date)
 
 #$HOME/Dropbox/projects/scripts/prowl.pl -apikey=fb18cb558102482e883ac76ba05a3c1b00212e96 -application=MakeMKV -event="MakeMKV rip completed" -notification="Started: $startDate :: Ended: $endDate" -priority=-2
@@ -45,7 +47,7 @@ endDate=$(date)
 curl -s \
   --form-string "token=aJDLy7G17EXCAfeqV2s2ujGjnT63xY" \
   --form-string "user=uiLUuynXsvF7UCQATr3j6j7pG7dGoh" \
-  --form-string "message=MakeMKV rip completed <> Started: $startDate :: Ended: $endDate" \
+  --form-string "message=MakeMKV rip of ${title} completed <> Started: $startDate :: Ended: $endDate" \
   https://api.pushover.net/1/messages.json
 
 popd
