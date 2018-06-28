@@ -15,6 +15,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--pings', help='Number of pings to send', required=True, type=int)
 parser.add_argument('-s', '--sleep', help='How long to sleep between ping sessions', required=True, type=int)
 parser.add_argument('-H', '--host', help='FQDN or IP to ping', required=True)
+parser.add_argument('-U', '--usertoken', help='Pushover User API Token')
+parser.add_argument('-A', '--apptoken', help='Pushover App API Token')
 args = parser.parse_args()
 
 
@@ -37,7 +39,7 @@ def old_ping(host):
 def ping(host):
     try:
         subprocess.check_output(
-            ['ping', '-c', str(args.pings), '-w', str(args.pings), '-q', host],
+            ['ping', '-c', str(args.pings), '-q', host],
             stderr=subprocess.STDOUT,  # get all output
             universal_newlines=True  # return string not bytes
         )
@@ -54,35 +56,23 @@ start_time = datetime.now()
 # loop till status changes
 failcount = 0
 maxfails = 3
-while failcount == 0:
+while True:
     print('{} : Pinging {} ({} pings)...'.format(datetime.now(), args.host, args.pings))
     result = ping(args.host)
     if result is True:
+        # reset failcount if necessary
+        failcount = 0
         print("Success! Sleeping {} seconds...".format(args.sleep))
         time.sleep(args.sleep)
     else:
-        attempt = 1
-        try:
-            print("{} : Pinging host {} failed (attempt {} of {})!".format(datetime.now(), args.host, failcount,
-                                                                           maxfails))
-            print("Sleeping 5 seconds before next attempt...")
+        failcount = failcount + 1
+        print("Ping failure: {} of {}".format(failcount, maxfails))
+        if failcount >= maxfails:
+            print("Maximum ping failures reached!")
+            break
+        else:
+            print("Sleeping 5 seconds before retry...")
             time.sleep(5)
-            result = ping(args.host)
-            if result is True:
-                print("Success! Resuming normal operations!")
-            else:
-                attempt = attempt + 1
-                if attempt >= maxfails:
-                    raise PingFailed
-        except PingFailed:
-            failcount = 1
-
-    # result = ping('10.200.105.106')
-    #if result is not True:
-    #    print('Ping failed!')
-    #    break
-    #print("Sleeping 5...")
-    #time.sleep(5)
 
 # calculate time spent running
 time_elapsed = datetime.now() - start_time
@@ -95,14 +85,20 @@ print(msg_time_elapsed)
 print("Sending pushover message...")
 
 # send a pushover message
-conn = httplib.HTTPSConnection("api.pushover.net:443")
-conn.request("POST", "/1/messages.json",
-  urllib.urlencode({
-    "token": "acu2n6t3qchjinsjgd9qtx1m5vfha4",
-    "user": "uiLUuynXsvF7UCQATr3j6j7pG7dGoh",
-    "message": msg_time_elapsed,
-  }), { "Content-type": "application/x-www-form-urlencoded" })
-conn.getresponse()
+if args.usertoken is not None:
+    if args.apptoken is not None:
+        conn = httplib.HTTPSConnection("api.pushover.net:443")
+        conn.request("POST", "/1/messages.json",
+          urllib.urlencode({
+            "token": args.apptoken,
+            "user": args.usertoken,
+            "message": msg_time_elapsed,
+          }), { "Content-type": "application/x-www-form-urlencoded" })
+        conn.getresponse()
+    else:
+        print("Pushover API tokens not supplied - no message will be sent!")
+else:
+    print("Pushover API tokens not supplied - no message will be sent!")
 
 # die
 exit(0)
