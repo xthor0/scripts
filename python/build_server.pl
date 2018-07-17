@@ -16,11 +16,11 @@ args = parser.parse_args()
 # finish later
 
 # generate a random name for the minion ID
-if args.name is None:
+if args.name is not None:
+    name = args.name
+else:
     seed = uuid.uuid4().hex
     name = seed[:12]
-else:
-    name = args.name
 
 print("Server will be named: ".format(name))
 
