@@ -9,8 +9,7 @@ import uuid
 parser = argparse.ArgumentParser()
 parser.add_argument('-p', '--profile', required=True, help='Server Profile Name')
 parser.add_argument('-n', '--name', help='Name for New Server (if omitted will be random)')
-parser.add_argument('-g', '--grains', help='Salt grains to assign to new server (in JSON)')
-parser.add_argument('-2', '--hd2size', type=int, help='Size of 2nd virtual hard disk (in GB)')
+parser.add_argument('-s', '--spec', help='Custom spec (in JSON) for specifying 2nd HD, grains, etc')
 args = parser.parse_args()
 
 # generate a random name for the minion ID (if name of new server is not specified)
@@ -22,19 +21,6 @@ else:
 
 # some user output for happiness
 print("Server will be named: ".format(name))
-
-# build spec JSON object
-if args.grains is not None:
-    if args.hd2size is not None:
-        hdspec = "'devices': { 'disk' : { 'Hard disk 2' : { 'size' : args.hd2size } } }"
-        spec = {
-            hdspec
-            grains
-        }
-    else:
-        spec = {
-            grains
-        }
 
 # this will control how much information the salt calls below output when building a VM
 # this can be commented out if NO input is preferred...
@@ -51,6 +37,8 @@ client = salt.cloud.CloudClient('/etc/salt/cloud')
 
 print('Building a server!\nName: {}\nSalt-Cloud Profile: {}'.format(name, args.profile))
 
+# TODO: there has to be a way to make the spec portion more human-friendly
+# right now I'm specifying -s "{ 'disk': { 'hard disk 2': {'size': '100'} }, 'grains': {'salt-cloud-deployed': 'true'} }"
 if spec is not None:
     s = client.profile(args.profile, names=[name], vm_overrides=spec)
 else:
