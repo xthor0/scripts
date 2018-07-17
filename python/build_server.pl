@@ -40,7 +40,7 @@ print('Building a server!\nName: {}\nSalt-Cloud Profile: {}'.format(name, args.p
 # TODO: there has to be a way to make the spec portion more human-friendly
 # right now I'm specifying -s "{ 'disk': { 'hard disk 2': {'size': '100'} }, 'grains': {'salt-cloud-deployed': 'true'} }"
 if args.spec is not None:
-    spec = { 'grains': {'pxt': 'ben', 'roles': {'docker-swarm'}, 'docker-role': 'worker'} }
+    spec = { 'grains': {'env': 'dev', 'pxt': 'ben', 'docker-role': 'worker', 'roles': {'docker-swarm', 'something-else'} } }
     s = client.profile(args.profile, names=[name], vm_overrides=spec)
 else:
     s = client.profile(args.profile, names=[name])
