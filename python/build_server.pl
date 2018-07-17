@@ -26,7 +26,7 @@ print("Server will be named: ".format(name))
 # build spec JSON object
 if args.grains is not None:
     if args.hd2size is not None:
-        hdspec = 'devices': { 'disk' : { 'Hard disk 2' : { 'size' : args.hd2size } } }
+        hdspec = "'devices': { 'disk' : { 'Hard disk 2' : { 'size' : args.hd2size } } }"
         spec = {
             hdspec
             grains
@@ -35,7 +35,7 @@ if args.grains is not None:
         spec = {
             grains
         }
-    
+
 # this will control how much information the salt calls below output when building a VM
 # this can be commented out if NO input is preferred...
 from salt.log.setup import setup_console_logger
