@@ -8,12 +8,21 @@ import uuid
 # get arguments from command-line
 parser = argparse.ArgumentParser()
 parser.add_argument('-p', '--profile', required=True, help='Server Profile Name')
+parser.add_argument('-n', '--name', help='Name for New Server (if omitted will be random)')
+parser.add_argument('-g', '--grains', help='Salt grains to assign to new server (in JSON)')
 args = parser.parse_args()
 
-# generate a random name for the minion ID
-seed = uuid.uuid4().hex
-name = seed[:12]
+# this needs work, and testing
+# finish later
 
+# generate a random name for the minion ID
+if args.name is None:
+    seed = uuid.uuid4().hex
+    name = seed[:12]
+else:
+    name = args.name
+
+print("Server will be named: ".format(name))
 
 # this will control how much information the salt calls below output when building a VM
 # this can be commented out if NO input is preferred...
