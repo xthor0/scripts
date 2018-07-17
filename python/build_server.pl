@@ -19,9 +19,6 @@ else:
     seed = uuid.uuid4().hex
     name = seed[:12]
 
-# some user output for happiness
-print("Server will be named: ".format(name))
-
 # this will control how much information the salt calls below output when building a VM
 # this can be commented out if NO input is preferred...
 from salt.log.setup import setup_console_logger
