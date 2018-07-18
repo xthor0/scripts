@@ -1,13 +1,9 @@
 #!/bin/bash
 
 # variables
-#source="http://mirror.facebook.net/centos/7.4.1708/isos/x86_64/CentOS-7-x86_64-Minimal-1708.iso"
-source="http://mirror.facebook.net/centos/7.4.1708/"
+source="http://mirror.facebook.net/centos/7"
 shatxt="${source}/isos/x86_64/sha256sum.txt"
-iso="${source}/isos/x86_64/CentOS-7-x86_64-Minimal-1708.iso"
-#iso="${source}/isos/x86_64/CentOS-7-x86_64-NetInstall-1708.iso"
 build="$HOME/isobuild"
-isoname=$(basename ${iso})
 shaname=$(basename ${shatxt})
 
 # we need command-line options
@@ -90,10 +86,12 @@ fi
 test -f ${shaname} && rm -f ${shaname}
 wget ${shatxt}
 if [ $? -eq 0 ]; then
-	# get iso, too
+	# this will ALWAYS download the latest ISO - so, we need to derive what that is from the hash file
+	isoname=$(cat ${shaname} | grep Minimal | awk '{ print $2 }')
 	if [ -f "${isoname}" ]; then
 		echo "ISO has already been downloaded..."
 	else
+		iso=${source}/isos/x86_64/${isoname}
 		wget ${iso}
 	fi
 else
