@@ -58,7 +58,8 @@ while true; do
     break
   else
     sleep 2
-fi
+  fi
+done
 
 # change the hostname
 sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} hostnamectl set-hostname ${vmname}.localdev
