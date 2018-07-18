@@ -8,8 +8,8 @@ fi
 # change if the template root password changes
 sshpasswd="p@ssw0rd"
 
-# options passed to sshpass
-sshpassopts="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+# options passed to ssh
+sshopts="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 
 vmname=$1
 vboxmanage import --vsys 0 --vmname ${vmname} --vsys 0 --unit 10 --disk /storage/vbox/${vmname}/${vmname}.vmdk /storage/vbox/ova/cent7template.ova
@@ -52,7 +52,7 @@ echo "Machine has booted - IP address is ${ipaddr}"
 # make sure that SSH is working - may require a second or 2
 while true; do
   echo "Waiting for SSH on ${ipaddr}... "
-  sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} whoami
+  sshpass -p ${sshpasswd} ssh ${sshopts} root@${ipaddr} whoami
   if [ $? -eq 0 ]; then
     echo "Success!"
     break
@@ -62,30 +62,30 @@ while true; do
 done
 
 # change the hostname
-sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} hostnamectl set-hostname ${vmname}.localdev
+sshpass -p ${sshpasswd} ssh ${sshopts} root@${ipaddr} hostnamectl set-hostname ${vmname}.localdev
 if [ $? -ne 0 ]; then
   echo "Error changing hostname of new minion -- exiting!"
   exit 255
 fi
 
 # push installation script over to the minion
-sshpass -p ${sshpasswd} ${sshpassopts} /storage/vbox/ova/setup_minion.sh root@${ipaddr}:/tmp
+sshpass -p ${sshpasswd} scp ${sshopts} /storage/vbox/ova/setup_minion.sh root@${ipaddr}:/tmp
 if [ $? -ne 0 ]; then
   echo "Error copying /storage/vbox/ova/setup_minion.sh to ${ipaddr} -- exiting!"
   exit 255
 fi
 
 # execute the script
-sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} bash /tmp/setup_minion.sh
+sshpass -p ${sshpasswd} ssh ${sshopts} root@${ipaddr} bash /tmp/setup_minion.sh
 if [ $? -ne 0 ]; then
   echo "Error configuring minion at ${ipaddr} -- exiting!"
   exit 255
 fi
 
 # if we don't tell the machine to renew the DHCP lease, DNS doesn't get updated right
-netdev=$(sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} "ip route" | grep default | awk '{ print $5 }')
+netdev=$(sshpass -p ${sshpasswd} ssh ${sshopts} root@${ipaddr} "ip route" | grep default | awk '{ print $5 }')
 if [ $? -eq 0 ]; then
-  sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} nmcli con up ${netdev}
+  sshpass -p ${sshpasswd} ssh ${sshopts} root@${ipaddr} nmcli con up ${netdev}
 else
   echo "Unable to determine default network device - DNS may not work properly for this minion."
 fi
