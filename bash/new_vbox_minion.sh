@@ -5,6 +5,12 @@ if [ -z "$1" ]; then
   exit 255
 fi
 
+# change if the template root password changes
+sshpasswd="p@ssw0rd"
+
+# options passed to sshpass
+sshpassopts="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+
 vmname=$1
 vboxmanage import --vsys 0 --vmname ${vmname} --vsys 0 --unit 10 --disk /storage/vbox/${vmname}/${vmname}.vmdk /storage/vbox/ova/cent7template.ova
 vboxmanage modifyvm ${vmname} --nic1 hostonly --hostonlyadapter1 vboxnet0
@@ -43,31 +49,42 @@ done
 # but let's see if the VM works first :)
 echo "Machine has booted - IP address is ${ipaddr}"
 
+# make sure that SSH is working - may require a second or 2
+while true; do
+  echo "Waiting for SSH on ${ipaddr}... "
+  sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} whoami
+  if [ $? -eq 0 ]; then
+    echo "Success!"
+    break
+  else
+    sleep 2
+fi
+
 # change the hostname
-sshpass -p "p@ssw0rd" ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@${ipaddr} hostnamectl set-hostname ${vmname}.localdev
+sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} hostnamectl set-hostname ${vmname}.localdev
 if [ $? -ne 0 ]; then
   echo "Error changing hostname of new minion -- exiting!"
   exit 255
 fi
 
 # push installation script over to the minion
-sshpass -p 'p@ssw0rd' scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no /storage/vbox/ova/setup_minion.sh root@${ipaddr}:/tmp
+sshpass -p ${sshpasswd} ${sshpassopts} /storage/vbox/ova/setup_minion.sh root@${ipaddr}:/tmp
 if [ $? -ne 0 ]; then
   echo "Error copying /storage/vbox/ova/setup_minion.sh to ${ipaddr} -- exiting!"
   exit 255
 fi
 
 # execute the script
-sshpass -p "p@ssw0rd" ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@${ipaddr} bash /tmp/setup_minion.sh
+sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} bash /tmp/setup_minion.sh
 if [ $? -ne 0 ]; then
   echo "Error configuring minion at ${ipaddr} -- exiting!"
   exit 255
 fi
 
 # if we don't tell the machine to renew the DHCP lease, DNS doesn't get updated right
-netdev=$(sshpass -p "p@ssw0rd" ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@${ipaddr} "ip route" | grep default | awk '{ print $5 }')
+netdev=$(sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} "ip route" | grep default | awk '{ print $5 }')
 if [ $? -eq 0 ]; then
-  sshpass -p "p@ssw0rd" ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@${ipaddr} nmcli con up ${netdev}
+  sshpass -p ${sshpasswd} ${sshpassopts} root@${ipaddr} nmcli con up ${netdev}
 else
   echo "Unable to determine default network device - DNS may not work properly for this minion."
 fi
