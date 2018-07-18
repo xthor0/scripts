@@ -6,7 +6,7 @@ if [ -z "$1" ]; then
 fi
 
 vmname=$1
-vboxmanage import --vsys 0 --vmname ${vmname} /storage/vbox/ova/cent7template.ova
+vboxmanage import --vsys 0 --vmname ${vmname} --vsys 0 --unit 10 --disk /storage/vbox/${vmname}/${vmname}.vmdk /storage/vbox/ova/cent7template.ova
 vboxmanage modifyvm ${vmname} --nic1 hostonly --hostonlyadapter1 vboxnet0
 vboxmanage startvm ${vmname} --type headless
 
