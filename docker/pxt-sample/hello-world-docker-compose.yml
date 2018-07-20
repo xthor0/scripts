@@ -1,0 +1,21 @@
+version: '2'
+
+services:
+  node:
+    build:
+      context: .
+      dockerfile: node.Dockerfile
+    labels:
+      - "traefik.enable=true"
+      - traefik.backend=node
+      - "traefik.frontend.rule=PathPrefixStrip:/hello"
+      - "traefik.docker.network=reverseproxy_default"
+    networks:
+      - "reverseproxy_default"
+    restart: always
+
+networks:
+  reverseproxy_default:
+    external:
+      name: reverseproxy_default
+
