@@ -1,16 +1,13 @@
 version: '3'
 
 services:
-  node:
-    image: xthor/helloworld
-    build:
-      context: .
-      dockerfile: node.Dockerfile
+  whoami:
+    image: emilevauge/whoami
     deploy:
       labels:
-        - "traefik.port=8080"
+        - "traefik.port=80"
         - "traefik.docker.network=traefik-net"
-        - "traefik.frontend.rule=PathPrefixStrip:/hello"
+        - "traefik.frontend.rule=PathPrefixStrip:/whoami"
     networks:
       - default
       - traefik-net
