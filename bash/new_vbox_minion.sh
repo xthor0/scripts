@@ -1,8 +1,20 @@
 #!/bin/bash
 
-if [ -z "$1" ]; then
-  echo "Need to specify a new name"
+# get command-line args
+while getopts "n:" OPTION; do
+  case $OPTION in
+    n) vmname_prefix="$OPTARG";;
+    *) usage;;
+  esac
+done
+
+# generate a VM name that starts with the string provided
+if [ -z "${vmname_prefix}" ]; then
+  echo "Error: -n option not specified! Exiting..."
   exit 255
+else
+  seed=$(date | md5sum)
+  vmname="${vmname_prefix}-${seed:0:10}"
 fi
 
 # change if the template root password changes
@@ -11,8 +23,8 @@ sshpasswd="p@ssw0rd"
 # options passed to ssh
 sshopts="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 
-vmname=$1
-vboxmanage import --vsys 0 --vmname ${vmname} --vsys 0 --unit 10 --disk /storage/vbox/${vmname}/${vmname}.vmdk /storage/vbox/ova/cent7template.ova
+# the new VM gets created by importing a CentOS 7 OVA that I built - this is a hack, I wish salt-cloud + virtualbox was working
+vboxmanage import --vsys 0 --vmname ${vmname} --vsys 0 --cpus 2 --vsys 0 --memory 4096 --vsys 0 --unit 10 --disk /storage/vbox/${vmname}/${vmname}.vmdk /storage/vbox/ova/cent7template.ova
 vboxmanage modifyvm ${vmname} --nic1 hostonly --hostonlyadapter1 vboxnet0
 vboxmanage startvm ${vmname} --type headless
 
