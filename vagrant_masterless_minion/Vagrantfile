@@ -73,9 +73,10 @@ Vagrant.configure("2") do |config|
     #masterless_minion.vm.network "public_network"
 
     ### Mount Salt file root
-    masterless_minion.vm.synced_folder "states/", "/srv/salt/states/"
-    masterless_minion.vm.synced_folder "pillars/", "/srv/salt/pillars/"
-    masterless_minion.vm.synced_folder "formulae/", "/srv/salt/formulae/"
+    masterless_minion.vm.synced_folder "~/git/chg-salt/states/", "/srv/salt/states/"
+    masterless_minion.vm.synced_folder "~/git/chg-salt/pillars/", "/srv/salt/pillars/"
+    masterless_minion.vm.synced_folder "~/git/chg-salt/local-salt/configs/", "/srv/salt/configs/"
+    #masterless_minion.vm.synced_folder "formulae/", "/srv/salt/formulae/"
     masterless_minion.vm.synced_folder "configs/", "/srv/salt/configs/"
     
     masterless_minion.vm.provision "shell", inline: <<-EOF
@@ -85,7 +86,7 @@ Vagrant.configure("2") do |config|
       # Disable Fastest Mirror YUM plugin
       sed -i 's/enabled=1/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
       # Install EPEL repo
-      yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      yum install -y epel-release
       # Install requisites for Salt as well some generic useful packages
       yum install -y python-pygit2 libgit2 git man-pages nano telnet
       # Preload Stash/Bitbucket's public SSH key
@@ -138,11 +139,11 @@ Vagrant.configure("2") do |config|
     # Host running Vagrant is likely 10.0.2.2
 
     ### Mount Salt file root
-    masterless_minion_repo.vm.synced_folder "~/Documents/git/chg/salt/states/", "/srv/salt/states/dev/"
-    masterless_minion_repo.vm.synced_folder "pillars/", "/srv/salt/pillars/"
-    masterless_minion_repo.vm.synced_folder "formulae/", "/srv/salt/formulae/"
-    masterless_minion_repo.vm.synced_folder "configs/", "/srv/salt/configs/"
-    masterless_minion_repo.vm.synced_folder "~/Documents/git/chg/salt/modules/", "/srv/salt/_modules/"
+    masterless_minion_repo.vm.synced_folder "~/git/chg-salt/states/", "/srv/salt/states/"
+    masterless_minion_repo.vm.synced_folder "~/git/chg-salt/pillars/", "/srv/salt/pillars/"
+    #masterless_minion_repo.vm.synced_folder "formulae/", "/srv/salt/formulae/"
+    masterless_minion_repo.vm.synced_folder "~/git/chg-salt/local-salt/configs/", "/srv/salt/configs/"
+    #masterless_minion_repo.vm.synced_folder "~/Documents/git/chg/salt/modules/", "/srv/salt/_modules/"
     
     masterless_minion_repo.vm.provision "shell", inline: <<-EOF
       # Disable IPv6
@@ -151,7 +152,7 @@ Vagrant.configure("2") do |config|
       # Disable Fastest Mirror YUM plugin
       sed -i 's/enabled=1/enabled=0/' /etc/yum/pluginconf.d/fastestmirror.conf
       # Install EPEL repo
-      yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+      yum install -y epel-release
       # Install requisites for Salt as well some generic useful packages
       yum install -y python-pygit2 libgit2 git man-pages nano telnet
       # Preload Stash/Bitbucket's public SSH key

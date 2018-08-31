@@ -6,9 +6,11 @@ services:
     build:
       context: .
       dockerfile: node.Dockerfile
+    ports:
+      - "8085:8080"
     deploy:
       labels:
-        - "traefik.port=8080"
+        - "traefik.port=8085"
         - "traefik.docker.network=traefik-net"
         - "traefik.frontend.rule=PathPrefixStrip:/hello"
     networks:
