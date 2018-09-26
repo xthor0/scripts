@@ -1,7 +1,10 @@
 #!/bin/bash
 
+# ips="10.99.32.238 10.99.0.99"
+ips="10.99.0.79 10.100.42.48"
+
 while true; do 
-  for ip in 10.99.32.238 10.99.0.99; do
+  for ip in ${ips}; do
     echo -n "${ip}: "
     STARTTIME=$(date +%s)
     curl --write-out %{http_code} --silent --output /dev/null http://${ip}/api/public/v2/leads/ping
