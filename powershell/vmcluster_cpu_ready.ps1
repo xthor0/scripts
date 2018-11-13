@@ -1,5 +1,6 @@
 param(
-    [Parameter(Mandatory = $true)][String] $datacenter
+    [Parameter(Mandatory = $true)][String] $datacenter,
+    [Parameter(Mandatory = $true)][Int] $hours
 )
 
 write-host "Getting clusters in datacenter $($datacenter)..."
@@ -11,10 +12,15 @@ foreach ($cluster in $clusters) {
     
     foreach ($vmHost in $vmhosts) {
         write-host -NoNewline "$($cluster) => $($vmHost) :: "
-        $stats = Get-Stat -Entity ($vmHost)-start (get-date).AddDays(-30) -Finish (Get-Date)-MaxSamples 10000 -stat cpu.ready.summation 
-        $readyAvg = $stats | Measure-Object -Property Value -Average | select -ExpandProperty Average
-        $readyPerc = $readyAvg / ($stats[0].IntervalSecs * 1000)
+        $stats = Get-Stat -Entity ($vmHost)-start (get-date).AddHours(-$hours) -Finish (Get-Date)-MaxSamples 10000 -stat cpu.ready.summation 
+        if ($stats.count -gt 0) {
+          $readyAvg = $stats | Measure-Object -Property Value -Average | select -ExpandProperty Average
+          $readyPerc = $readyAvg / ($stats[0].IntervalSecs * 1000)
         
-        Write-Output "CPU ready $('{0:p}' -f $readyPerc)"    
-    }    
+          Write-Output "CPU ready $('{0:p}' -f $readyPerc)"
+        } else {
+          Write-Output "N/A"
+        }
+    }
+    Write-Output ""
 }
