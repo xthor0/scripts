@@ -1,5 +1,12 @@
 #!/bin/bash
 
+function comment_to_do() {
+    There are a few things I need to do here:
+
+    1. idempotency - make the script CHECK to see if things are installed BEFORE installing them.
+    2. make it flavor independent - check for cinnamon and install nemo-dropbox, check for gnome and install nautilus-dropbox (just a couple examples)
+}
+
 # make sure we're running this as a non-root user...
 if [ "$(whoami)" == "root" ]; then
     echo "You should not run this script as root - instead, it will invoke commands"
@@ -30,10 +37,6 @@ gpgcheck=1
 gpgkey=https://dl-ssl.google.com/linux/linux_signing_key.pub
 EOF
 
-# virtualbox fedora repo
-echo "Installing VirtualBox official repo..."
-curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo | sudo tee /etc/yum.repos.d/virtualbox.repo
-
 # improve fonts
 echo "Installing copy dawid/better_fonts..."
 sudo dnf -y copr enable dawid/better_fonts
@@ -49,6 +52,10 @@ sudo dnf config-manager --add-repo=https://negativo17.org/repos/fedora-spotify.r
 # fedora-multimedia gets you makemkv!
 echo "Installing Fedora Multimedia repo..."
 sudo dnf config-manager --add-repo=https://negativo17.org/repos/fedora-multimedia.repo
+
+# vscode
+sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
 
 # do a full upgrade
 echo "Performing full dnf upgrade..."
@@ -70,7 +77,7 @@ fi
 
 # install all the packages
 echo "Installing a bunch of packages..."
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen google-chrome-stable VirtualBox-5.2 vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox chrome-gnome-shell telegram-desktop git gnome-tweaks makemkv
+sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen google-chrome-stable VirtualBox vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox telegram-desktop git makemkv code
 
 ## ONLY NECESSARY FOR LAPTOPS
 chassistype=$(hostnamectl status | grep Chassis | awk '{ print $2 }')
