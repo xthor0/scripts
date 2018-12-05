@@ -1,5 +1,12 @@
 #!/bin/bash
 
+function comment_to_do() {
+    There are a few things I need to do here:
+
+    1. idempotency - make the script CHECK to see if things are installed BEFORE installing them.
+    2. make it flavor independent - check for cinnamon and install nemo-dropbox, check for gnome and install nautilus-dropbox (just a couple examples)
+}
+
 # make sure we're running this as a non-root user...
 if [ "$(whoami)" == "root" ]; then
     echo "You should not run this script as root - instead, it will invoke commands"
@@ -15,11 +22,19 @@ if [ "$(sudo whoami)" != "root" ]; then
     exit 255
 fi
 
-# add additional packages that don't come with Fedora by default
-echo "Installing rpmfusion release pacakges..."
-sudo su -c 'dnf install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm http://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm'
+# add additional packages that don't come with Fedora
 
+rpm -qa | egrep -q 'rpmfusion-(free|nonfree)'
+if [ $? -eq 1 ]; then
+    echo "Installing rpmfusion release pacakges..."
+    sudo su -c 'dnf install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm http://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm'
+else
+    echo "rpmfusion release packages are already installed."
+fi
+
+function comment_chrome() {
 # google fedora repo
+# update 2018.11.30 - Chrome has been really weird lately. I prefer Firefox right now, and it comes installed by default.
 echo "Installing official Google Chrome repository..."
 cat << EOF | sudo tee /etc/yum.repos.d/google-chrome.repo
 [google-chrome]
@@ -29,26 +44,50 @@ enabled=1
 gpgcheck=1
 gpgkey=https://dl-ssl.google.com/linux/linux_signing_key.pub
 EOF
+}
 
-# virtualbox fedora repo
-echo "Installing VirtualBox official repo..."
-curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo | sudo tee /etc/yum.repos.d/virtualbox.repo
-
-# improve fonts
-echo "Installing copy dawid/better_fonts..."
-sudo dnf -y copr enable dawid/better_fonts
-
-# pycharm IDE for Python development
-echo "Installing copr for PyCharm..."
-sudo dnf -y copr enable phracek/PyCharm 
+for repo in dawid/better_fonts phracek/PyCharm; do
+    sudo dnf copr list | grep -q ${repo}
+    if [ $? -eq 1 ]; then 
+        echo "Installing copr repo ${repo}..."
+        sudo dnf -y copr enable ${repo}
+    else
+        echo "copr repo ${repo} is already installed."
+    fi
 
 # spotify
-echo "Installing Spotify repo..."
-sudo dnf config-manager --add-repo=https://negativo17.org/repos/fedora-spotify.repo
+if [ -f /etc/yum.repos.d/fedora-spotify.repo ]; then
+    echo "Fedora Spotify repo already enabled."
+else
+    echo "Installing Spotify repo..."
+    sudo dnf config-manager --add-repo=https://negativo17.org/repos/fedora-spotify.repo
+fi
 
 # fedora-multimedia gets you makemkv!
-echo "Installing Fedora Multimedia repo..."
-sudo dnf config-manager --add-repo=https://negativo17.org/repos/fedora-multimedia.repo
+if [ -f /etc/yum.repos.d/fedora-multimedia.repo ]; then
+    echo "Fedora Multimedia repo is already installed."
+else
+    echo "Installing Fedora Multimedia repo..."
+    sudo dnf config-manager --add-repo=https://negativo17.org/repos/fedora-multimedia.repo
+fi
+
+# vscode
+if [ -f /etc/yum.repos.d/vscode.repo ]; then
+    echo "vscode repo is already installed."
+else
+    sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
+    sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
+fi
+
+# slack
+rpm -qa | grep -q slack 
+if [ $? -eq 1 ]; then 
+    sudo dnf install https://downloads.slack-edge.com/linux_releases/slack-3.3.3-0.1.fc21.x86_64.rpm
+    # see this link for why: https://stackoverflow.com/questions/53084955/why-does-slack-return-a-segmentation-fault-after-fedora-29-upgrade
+    sudo ln -fs /usr/share/code/libnode.so /usr/lib/slack/libnode.so
+else
+    echo "Slack is already installed."
+fi
 
 # do a full upgrade
 echo "Performing full dnf upgrade..."
@@ -70,7 +109,7 @@ fi
 
 # install all the packages
 echo "Installing a bunch of packages..."
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen google-chrome-stable VirtualBox-5.2 vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox chrome-gnome-shell telegram-desktop git gnome-tweaks makemkv
+sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox telegram-desktop git makemkv code
 
 ## ONLY NECESSARY FOR LAPTOPS
 chassistype=$(hostnamectl status | grep Chassis | awk '{ print $2 }')
