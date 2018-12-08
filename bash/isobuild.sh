@@ -47,16 +47,6 @@ if [ ! -f "$(which createrepo)" ]; then
 fi
 
 ### BEGIN ###>>
-# can we sudo?
-echo "You're going to need sudo rights to run this, for several reasons."
-echo "1: We have to install the salt-repo-latest package, so we can spin that into the ISO"
-echo "2: For some dumb reason, yum won't allow --downloadonly unless you run it as root"
-echo "Stupid, I know."
-echo
-echo "Please enter your sudo password when prompted (running 'sudo whoami' to test:)"
-echo
-sudo whoami
-
 pushd ${build}
 if [ $? -ne 0 ]; then
 	echo "Error, does ${build} exist as a directory?"
@@ -109,6 +99,16 @@ else
 	rm validate.txt
 fi
 
+# can we sudo?
+echo "You're going to need sudo rights to run this, for several reasons."
+echo "1: We have to install the salt-repo-latest package, so we can spin that into the ISO"
+echo "2: For some dumb reason, yum won't allow --downloadonly unless you run it as root"
+echo "Stupid, I know."
+echo
+echo "Please enter your sudo password when prompted (running 'sudo whoami' to test:)"
+echo
+sudo whoami
+
 # extract ISO
 7z x -oextract ${isoname}
 
@@ -138,7 +138,7 @@ label linux
 EOF
 
 # we also have to do this to the grub.cfg if we're booting UEFI
-cat << EOF > extract/BOOT/EFI/grub.cfg
+cat << EOF > extract/EFI/BOOT/grub.cfg
 set default="1"
 set timeout=20
 
@@ -147,15 +147,15 @@ EOF
 
 # append installation options if we want VNC
 if [ -n "$vnc" ]; then
-	echo "append initrd=initrd.img inst.stage2=hd:LABEL=CentOS-7-KSInst quiet inst.ks=cdrom:/dev/cdrom:/ks.cfg inst.vnc inst.vncpassword=r0ck0n netwait=60" >> extract/isolinux/isolinux.cfg
-	echo "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=CentOS-7-KSInst quiet inst.ks=cdrom:/dev/cdrom:/ks.cfg inst.vnc inst.vncpassword=r0ck0n netwait=60" >> extract/BOOT/EFI/grub.cfg
+	echo "append initrd=initrd.img inst.stage2=hd:LABEL=CentOS-7-KSInst quiet inst.ks=hd:LABEL=CentOS-7-KSInst:/ks.cfg inst.vnc inst.vncpassword=r0ck0n netwait=60" >> extract/isolinux/isolinux.cfg
+	echo "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=CentOS-7-KSInst quiet inst.ks=hd:LABEL=CentOS-7-KSInst:/ks.cfg inst.vnc inst.vncpassword=r0ck0n netwait=60" >> extract/EFI/BOOT/grub.cfg
 else
-	echo "append initrd=initrd.img inst.stage2=hd:LABEL=CentOS-7-KSInst quiet inst.ks=cdrom:/dev/cdrom:/ks.cfg netwait=60" >> extract/isolinux/isolinux.cfg
-	echo "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=CentOS-7-KSInst quiet inst.ks=cdrom:/dev/cdrom:/ks.cfg netwait=60" >> extract/BOOT/EFI/grub.cfg
+	echo "append initrd=initrd.img inst.stage2=hd:LABEL=CentOS-7-KSInst quiet inst.ks=hd:LABEL=CentOS-7-KSInst:/ks.cfg netwait=60" >> extract/isolinux/isolinux.cfg
+	echo "linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=CentOS-7-KSInst quiet inst.ks=hd:LABEL=CentOS-7-KSInst:/ks.cfg netwait=60" >> extract/EFI/BOOT/grub.cfg
 fi
 
 # close out grub.cfg for UEFI
-cat << EOF >> extract/BOOT/EFI/grub.cfg
+cat << EOF >> extract/EFI/BOOT/grub.cfg
 initrdefi /images/pxeboot/initrd.img
 }
 EOF
