@@ -17,7 +17,7 @@ function usage() {
 while getopts "i:o:" OPTION; do
 	case $OPTION in
 		i) inputfile="$OPTARG";;
-		g) outputdir="$OPTARG";;
+		o) outputdir="$OPTARG";;
 		*) usage;;
 	esac
 done
@@ -34,7 +34,7 @@ if [ -f "$inputfile" ]; then
 		newfile=$(basename "$inputfile" .mkv)
 		echo "Encoding ${inputfile} to ${outputdir}/${newfile}.m4v..."
 		start=$(date +%s)
-		echo | HandBrakeCLI -Z 'High Profile' -m -i "${inputfile}" -o "encode/${newfile}.m4v" 2> $currentLog
+		HandBrakeCLI -Z 'HQ 1080p30 Surround' -m -i "${inputfile}" -o "${outputdir}/${newfile}.m4v" 2> $currentLog
 		end=$(date +%s)
 		diff=$(($start-$end))
 		echo "$(($diff / 60)) minutes and $(($diff % 60)) seconds elapsed."
