@@ -109,7 +109,13 @@ fi
 
 # install all the packages
 echo "Installing a bunch of packages..."
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox telegram-desktop git makemkv code
+sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox telegram-desktop git makemkv code putty gimp hexedit 
+
+# install distro-specific packages
+rpm -qa | grep -q cinnamon-desktop
+if [ $? -eq 0 ]; then
+  sudo dnf -y install nemo-dropbox
+fi
 
 ## ONLY NECESSARY FOR LAPTOPS
 chassistype=$(hostnamectl status | grep Chassis | awk '{ print $2 }')
@@ -130,12 +136,13 @@ else
 fi
 
 # nss-mdns is evil
-### don't do this on KDE!!! it removes... KDE :)
-sudo dnf -y remove nss-mdns
-
-# if you decide to run KDE again, you can do this instead:
-#cp /etc/nsswitch.conf ~/nsswitch.conf.bkup
-#sudo sed -i 's/^hosts:.*mdns4_minimal.*/hosts:      files dns myhostname/g' /etc/nsswitch.conf
+rpm -qa | grep -q plasma-workspace
+if [ $? -eq 0 ]; then
+  # KDE is installed - don't remove nss-mdns or it'll remove KDE
+  sudo sed -i 's/^hosts:.*mdns4_minimal.*/hosts:      files dns myhostname/g' /etc/nsswitch.conf
+else
+  sudo dnf -y remove nss-mdns
+fi
 
 # keeping this in case I ever need it again...
 # cypher cert from Active Directory
