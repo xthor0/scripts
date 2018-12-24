@@ -89,6 +89,21 @@ else
     echo "Slack is already installed."
 fi
 
+# virtualbox
+# if a version of VirtualBox is too new for this version of Fedora, this script MAY fail... I'll have to test it.
+if [ -f /etc/yum.repos.d/virtualbox.repo ]; then
+    echo "VirtualBox repo already configured."
+else
+    fedrel=$(lsb_release -r | awk '{ print $2 }')
+    vbcheck=$(curl --write-out %{http_code} --silent --output /dev/null http://download.virtualbox.org/virtualbox/rpm/fedora/${fedrel})
+    curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo | sudo tee /etc/yum.repos.d/virtualbox.repo
+    if [ ${vbcheck} -eq 404 ]; then
+        echo "Fedora ${fedrel} is not supported by VirtualBox yet. 404 received checking download.virtualbox.org."
+        echo "The DNF command below may fail..."
+        read -n 1 -s -r -p "Press any key to continue (or CTRL-C to exit)"
+    fi
+fi
+
 # do a full upgrade
 echo "Performing full dnf upgrade..."
 sudo dnf -y upgrade
@@ -109,7 +124,7 @@ fi
 
 # install all the packages
 echo "Installing a bunch of packages..."
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox telegram-desktop git makemkv code putty gimp hexedit 
+sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox-6.0 vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox telegram-desktop git makemkv code putty gimp hexedit 
 
 # install distro-specific packages
 rpm -qa | grep -q cinnamon-desktop
