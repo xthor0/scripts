@@ -124,12 +124,14 @@ fi
 
 # install all the packages
 echo "Installing a bunch of packages..."
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox-6.0 vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils nautilus-dropbox telegram-desktop git makemkv code putty gimp hexedit 
+sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox-6.0 vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak openldap-clients f3 screen p7zip-plugins
 
 # install distro-specific packages
 rpm -qa | grep -q cinnamon-desktop
 if [ $? -eq 0 ]; then
   sudo dnf -y install nemo-dropbox
+else
+  sudo dnf -y install nautilus-dropbox
 fi
 
 ## ONLY NECESSARY FOR LAPTOPS
@@ -157,6 +159,17 @@ if [ $? -eq 0 ]; then
   sudo sed -i 's/^hosts:.*mdns4_minimal.*/hosts:      files dns myhostname/g' /etc/nsswitch.conf
 else
   sudo dnf -y remove nss-mdns
+fi
+
+# install Slack from flatpak
+flatpak install https://flathub.org/repo/appstream/com.slack.Slack.flatpakref
+
+# install a bunch of media stuff - optional
+echo "Do you wish to install stuff for your home machine (steam, makemkv, HandBrake)?"
+read yesno
+result=$(echo ${yesno} | tr [:upper:] [:lower:])
+if [ "${result}" == "y" ]; then
+  sudo dnf -y install makemkv HandBrake-gui steam
 fi
 
 # keeping this in case I ever need it again...
@@ -187,6 +200,8 @@ sudo systemctl stop firewalld
 # virtualbox needs you to be a member of vboxusers if you have a prayer of using USB
 sudo usermod -aG vboxusers $(whoami)
 echo "You should log out now if you want to use USB devices with VirtualBox."
+
+
 
 # we're done
 echo "$(basename $0) completed successfully!"
