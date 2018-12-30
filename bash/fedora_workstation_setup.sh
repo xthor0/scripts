@@ -124,7 +124,7 @@ fi
 
 # install all the packages
 echo "Installing a bunch of packages..."
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox-6.0 vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak openldap-clients f3 screen p7zip-plugins
+sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen VirtualBox-6.0 vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop pycharm-community spotify remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak openldap-clients f3 screen p7zip-plugins iperf
 
 # install distro-specific packages
 rpm -qa | grep -q cinnamon-desktop
