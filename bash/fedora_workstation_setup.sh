@@ -157,14 +157,6 @@ fi
 # install Slack from flatpak
 flatpak install https://flathub.org/repo/appstream/com.slack.Slack.flatpakref
 
-# install a bunch of media stuff - optional
-echo "Do you wish to install stuff for your home machine (steam, makemkv, HandBrake)?"
-read -p "(Y/N): " yesno
-result=$(echo ${yesno} | tr [:upper:] [:lower:])
-if [ "${result}" == "y" ]; then
-  sudo dnf -y install makemkv HandBrake-gui steam
-fi
-
 # keeping this in case I ever need it again...
 # cypher cert from Active Directory
 #grep -q stormwind.local /etc/resolv.conf
@@ -193,9 +185,24 @@ if [ $? -eq 0 ]; then
   read -p "(Y/N): " yesno
   result=$(echo ${yesno} | tr [:upper:] [:lower:])
   if [ "${result}" == "y" ]; then
-    sudo dnf -y install nvidia-driver nvidia-settings
+    sudo dnf -y --disablerepo=fedora-multimedia install xorg-x11-drv-nvidia akmod-nvidia
   fi
 fi
+
+# install a bunch of media stuff - optional
+echo "Do you wish to install stuff for your home machine (steam, makemkv, HandBrake)?"
+read -p "(Y/N): " yesno
+result=$(echo ${yesno} | tr [:upper:] [:lower:])
+if [ "${result}" == "y" ]; then
+  sudo dnf -y install makemkv HandBrake-gui
+  sudo dnf -y --disablerepo=fedora-multimedia install steam
+fi
+
+# remind me
+echo "If you installed Steam or nvidia drivers, you'll want to add this to /etc/yum.repos.d/fedora-multimedia.repo under the fedora-multimedia repo:"
+echo
+echo "exclude=*nvidia*,steam"
+echo
 
 # kill firewalld
 sudo systemctl disable firewalld
