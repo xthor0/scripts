@@ -1,11 +1,12 @@
 #!/bin/bash
 
-function comment_to_do() {
+# TO DO!
+: <<'END'
     There are a few things I need to do here:
 
     1. idempotency - make the script CHECK to see if things are installed BEFORE installing them.
     2. make it flavor independent - check for cinnamon and install nemo-dropbox, check for gnome and install nautilus-dropbox (just a couple examples)
-}
+END
 
 # make sure we're running this as a non-root user...
 if [ "$(whoami)" == "root" ]; then
@@ -32,11 +33,12 @@ else
     echo "rpmfusion release packages are already installed."
 fi
 
-function comment_chrome() {
 # google fedora repo
-# update 2018.11.30 - Chrome has been really weird lately. I prefer Firefox right now, and it comes installed by default.
-echo "Installing official Google Chrome repository..."
-cat << EOF | sudo tee /etc/yum.repos.d/google-chrome.repo
+if [ -f /etc/yum.repos.d/google-chrome.repo ]; then
+  echo "Google Chrome repo already installed."
+else
+  echo "Installing official Google Chrome repository..."
+  cat << EOF | sudo tee /etc/yum.repos.d/google-chrome.repo
 [google-chrome]
 name=google-chrome
 baseurl=http://dl.google.com/linux/chrome/rpm/stable/x86_64
@@ -44,7 +46,7 @@ enabled=1
 gpgcheck=1
 gpgkey=https://dl-ssl.google.com/linux/linux_signing_key.pub
 EOF
-}
+fi
 
 for repo in dawid/better_fonts phracek/PyCharm; do
     sudo dnf copr list | grep -q ${repo}
@@ -54,6 +56,7 @@ for repo in dawid/better_fonts phracek/PyCharm; do
     else
         echo "copr repo ${repo} is already installed."
     fi
+done
 
 # spotify
 if [ -f /etc/yum.repos.d/fedora-spotify.repo ]; then
@@ -77,16 +80,6 @@ if [ -f /etc/yum.repos.d/vscode.repo ]; then
 else
     sudo rpm --import https://packages.microsoft.com/keys/microsoft.asc
     sudo sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
-fi
-
-# slack
-rpm -qa | grep -q slack 
-if [ $? -eq 1 ]; then 
-    sudo dnf install https://downloads.slack-edge.com/linux_releases/slack-3.3.3-0.1.fc21.x86_64.rpm
-    # see this link for why: https://stackoverflow.com/questions/53084955/why-does-slack-return-a-segmentation-fault-after-fedora-29-upgrade
-    sudo ln -fs /usr/share/code/libnode.so /usr/lib/slack/libnode.so
-else
-    echo "Slack is already installed."
 fi
 
 # virtualbox
@@ -166,7 +159,7 @@ flatpak install https://flathub.org/repo/appstream/com.slack.Slack.flatpakref
 
 # install a bunch of media stuff - optional
 echo "Do you wish to install stuff for your home machine (steam, makemkv, HandBrake)?"
-read yesno
+read -p "(Y/N): " yesno
 result=$(echo ${yesno} | tr [:upper:] [:lower:])
 if [ "${result}" == "y" ]; then
   sudo dnf -y install makemkv HandBrake-gui steam
@@ -193,6 +186,17 @@ EndSection
 EOF
 fi
 
+# install nvidia drivers if we're running a supported card...
+lspci | grep -qi VGA.*NVIDIA
+if [ $? -eq 0 ]; then
+  echo "Do you want to install the nvidia drivers? Make sure your card is supported!"
+  read -p "(Y/N): " yesno
+  result=$(echo ${yesno} | tr [:upper:] [:lower:])
+  if [ "${result}" == "y" ]; then
+    sudo dnf -y install nvidia-driver nvidia-settings
+  fi
+fi
+
 # kill firewalld
 sudo systemctl disable firewalld
 sudo systemctl stop firewalld
@@ -200,8 +204,6 @@ sudo systemctl stop firewalld
 # virtualbox needs you to be a member of vboxusers if you have a prayer of using USB
 sudo usermod -aG vboxusers $(whoami)
 echo "You should log out now if you want to use USB devices with VirtualBox."
-
-
 
 # we're done
 echo "$(basename $0) completed successfully!"
