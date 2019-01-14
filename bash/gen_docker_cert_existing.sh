@@ -35,9 +35,12 @@ done
 
 # generate the certs
 openssl req -subj "/CN=docker_host_${servername}" -sha256 -new -key key.pem -out ${servername}.csr
-openssl x509 -req -days 3650 -sha256 -in ${servername}.csr -CA ca.pem -CAkey ca-key.pem -out ${servername}.pem -CAcreateserial -CAserial ca.srl -extfile <(echo -e "subjectAltName=IP:${ipaddr},IP:127.0.0.1\nextendedKeyUsage=serverAuth")
+openssl x509 -req -days 3650 -sha256 -in ${servername}.csr -CA ca.pem -CAkey ca-key.pem -out ${servername}.pem -CAcreateserial -CAserial ca.srl -extfile <(echo -e "subjectAltName=DNS.1:${servername}.mychg.com,IP:${ipaddr},IP:127.0.0.1\nextendedKeyUsage=serverAuth")
 
 # spit out a message
 echo "Cert generated: ${servername}.pem"
+
+# make it easier to put in the pillar
+cat ${servername}.pem | while read line; do echo "          ${line}"; done
 
 exit 0
