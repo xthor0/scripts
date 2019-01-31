@@ -32,7 +32,8 @@ echo "Please enter your sudo password when prompted."
 sudo whoami
 
 # the new VM gets created by importing a CentOS 7 OVA that I built - this is a hack, I wish salt-cloud + virtualbox was working
-vboxmanage import --vsys 0 --vmname ${vmname} --vsys 0 --cpus 1 --vsys 0 --memory 1024 --vsys 0 --unit 11 --disk ${HOME}/"VirtualBox VMs"/${vmname}/${vmname}.vmdk ${HOME}/cent7template.ova
+vboxmanage import --vsys 0 --vmname ${vmname} --vsys 0 --cpus 1 --vsys 0 --memory 1024 --vsys 0 --settingsfile ${HOME}/"VirtualBox VMs"/${vmname}/${vmname}.vbox \
+  --vsys 0 --unit 14 --disk ${HOME}/"VirtualBox VMs"/${vmname}/${vmname}.vmdk ${HOME}/cent7template.ova
 if [ $? -ne 0 ]; then
     echo "Error importing ova template. Exiting."
     exit 255
@@ -41,6 +42,13 @@ fi
 vboxmanage modifyvm ${vmname} --nic1 hostonly --hostonlyadapter1 vboxnet0
 if [ $? -ne 0 ]; then
   echo "Error setting nic1 to hostonlyadapter - exiting."
+  exit 255
+fi
+
+# make sure we can access the settings file
+if [ ! -f ${HOME}/"VirtualBox VMs"/${vmname}/${vmname}.vbox ]; then
+  echo "Error - could not access settings file: ${HOME}/"VirtualBox VMs"/${vmname}/${vmname}.vbox"
+  echo "Did something go wrong with the import process?"
   exit 255
 fi
 
