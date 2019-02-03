@@ -1,8 +1,29 @@
 #!/bin/sh
-userName='xthor@xthorsworld.com'
-password='aiPooph2un'
 
-result="`/usr/bin/curl -s -m 60 -u ${userName}:${password} 'https://updates.dnsomatic.com/nic/update?'`"
+# display usage
+function usage() {
+  echo "`basename $0`: Update DNS-O-MATIC dynamic DNS entries"
+  echo "Usage:
+
+`basename $0` -u <username> -p <password>"
+        exit 255
+}
+
+# get command-line args
+while getopts "u:p:" OPTION; do
+  case $OPTION in
+    u) userName="$OPTARG";;
+    p) password="$OPTARG";;
+    *) usage;;
+  esac
+done
+
+# validate arguments
+if [ -z "${password}" -o -z "${userName}" ]; then
+  usage
+fi
+
+result="$(/usr/bin/curl -s -m 60 -u ${userName}:${password} 'https://updates.dnsomatic.com/nic/update?')"
 retval=$?
 alliswell=1
 attempts=0
