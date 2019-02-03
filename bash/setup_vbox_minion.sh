@@ -24,7 +24,7 @@ yum install -y salt salt-minion
 
 # set master so that Salt can find it
 echo "hash_type: sha256
-id: ${1}.localdev
+id: ${1}
 log_level: info
 master: 10.187.88.10" | tee /etc/salt/minion
 
