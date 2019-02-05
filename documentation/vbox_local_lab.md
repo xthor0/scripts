@@ -17,10 +17,13 @@ I need to write a similar guide for OS X.
     * also add "net.ipv4.ip_forward=1" to /etc/sysctl.d/99-sysctl.conf
 1. Install dnsmasq, and add the following lines to /etc/dnsmasq.conf:
 ~~~
+domain=lab
 interface=vboxnet0
-dhcp-range=10.187.88.20,10.187.88.250,2h
-dhcp-option=3,10.187.88.1
-dhcp-option=6,10.187.88.1
+dhcp-option=vboxnet0,6,10.187.88.1
+dhcp-range=vboxnet0,10.187.88.100,10.187.88.250,2h
+dhcp-option=vboxnet0,3,10.187.88.1
+address=/salt-master/10.187.88.10
+address=/salt/10.187.88.10
 ~~~
 
 ## Build a Salt master
