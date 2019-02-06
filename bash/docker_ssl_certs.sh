@@ -155,7 +155,7 @@ else
     if [ -f ${servername}.pem ]; then
         echo "Cert already generated for: ${servername}"
     else
-        gen_csr ${servername} server-key.pem && sign_server_csr ${servername}
+        gen_csr ${servername} server-key.pem && sign_server_csr ${servername} ${ipaddr}
         if [ $? -eq 0 ]; then
             echo "Cert generated for: ${servername}"
             rm ${servername}.csr
