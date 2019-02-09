@@ -145,6 +145,7 @@ If everything is working as expected, in a few seconds you should be able to run
 When you're ready to remove a VM from your system, run the following commands.
 From the salt master:
 ~~~
+salt --async minion1.lab system.poweroff
 salt-key -d minion1
 ~~~
 From the host system:
