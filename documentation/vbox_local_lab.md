@@ -24,6 +24,11 @@ address=/salt/10.187.88.10" | sudo tee /etc/dnsmasq.d/vbox.conf
 systemctl restart dnsmasq
 systemctl enable dnsmasq
 ~~~
+If you're running Fedora Workstation (with Gnome), you'll need to get rid of the default libvirt installation, otherwise DNSMasq won't start.
+~~~
+sudo dnf remove gnome-boxes
+~~~
+Reboot afterward, and the network interface `virbr0` will be gone, along with the running dnsmasq instance that was causing a conflict.
 ## OS X
 All instructions can be found here: https://kfigiela.github.io/2014/11/07/using-native-os-x-nat-with-virutalbox/
 Configure IP forwarding:
@@ -62,6 +67,11 @@ NOTE: This service probably won't start at boot, and I didn't dig enough to figu
 
 ## Optional: Bash completion for vboxmanage
 https://github.com/gryf/vboxmanage-bash-completion/blob/master/VBoxManage
+
+This will allow you to tab complete `vboxmanage` commands. Here's a quick one-liner to install it:
+~~~
+curl https://raw.githubusercontent.com/gryf/vboxmanage-bash-completion/master/VBoxManage | tee -a $HOME/.bash_completion
+~~~
 
 # SSH configuration on host system
 Adding these lines to `$HOME/.ssh/config` will prevent your computer from adding anything in your lab to the `known_hosts` file on your computer.
