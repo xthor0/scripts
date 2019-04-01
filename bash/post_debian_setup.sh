@@ -6,7 +6,7 @@ cat << EOF > /usr/local/minion-setup
 # meant to be run via systemd on a vbox minion
 # an easier way to deploy since salt-cloud doesn't work
 
-newHostName=\$(VBoxControl --nologo guestproperty get GuestName | awk '{ print $2 }')
+newHostName=\$(VBoxControl --nologo guestproperty get GuestName | awk '{ print \$2 }')
 
 # make sure the result isn't zero length (indicating VBoxControl doesn't work), or "value" (not set)
 if [ \${#newHostName} -eq 0 ]; then
@@ -18,7 +18,7 @@ elif [ "\${newHostName}" == "value" ]; then
 fi
 
 # set the hostname
-hostnamectl set-hostname \$\{newHostName\}.lab
+hostnamectl set-hostname \${newHostName}.lab
 
 # point the minion at the right master
 echo "master: 10.187.88.10" | tee /etc/salt/minion
