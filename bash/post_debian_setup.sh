@@ -56,7 +56,7 @@ EOF
 systemctl disable salt-minion
 
 # make sure the script we created executes at boot
-systemctl enable salt-minion
+systemctl enable minion-setup
 
 # allow remote login via SSH as root
 sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
