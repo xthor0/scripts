@@ -27,6 +27,9 @@ echo "master: 10.187.88.10" | tee /etc/salt/minion
 systemctl enable salt-minion
 systemctl start salt-minion
 
+# I'm not sure why this is necessary on Debian, but...
+sleep 5 && systemctl restart salt-minion
+
 # get rid of the evidence
 systemctl disable minion-setup
 rm /etc/systemd/system/minion-setup.service
