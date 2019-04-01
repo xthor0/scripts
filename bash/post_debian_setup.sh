@@ -28,6 +28,7 @@ systemctl enable salt-minion
 systemctl start salt-minion
 
 # get rid of the evidence
+systemctl disable minion-setup
 rm /etc/systemd/system/minion-setup.service
 rm /usr/local/deploy-minion
 
