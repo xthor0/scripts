@@ -6,13 +6,13 @@ cat << EOF > /usr/local/minion-setup
 # meant to be run via systemd on a vbox minion
 # an easier way to deploy since salt-cloud doesn't work
 
-newHostName=\$\(VBoxControl --nologo guestproperty get GuestName | awk '{ print $2 }'\)
+newHostName=\$(VBoxControl --nologo guestproperty get GuestName | awk '{ print $2 }')
 
 # make sure the result isn't zero length (indicating VBoxControl doesn't work), or "value" (not set)
-if [ \$\{#newHostName\} -eq 0 ]; then
+if [ \${#newHostName} -eq 0 ]; then
   echo "vbox guest property not set - exiting."
   exit 255
-elif [ "$\{newHostName\}" == "value" ]; then
+elif [ "\${newHostName}" == "value" ]; then
   echo "vbox guest property not set - exiting."
   exit 255
 fi
