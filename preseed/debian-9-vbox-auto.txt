@@ -89,6 +89,6 @@ d-i finish-install/keep-consoles boolean true
 
 
 ### Postinstall
-d-i preseed/late_command string in-target wget -q https://raw.githubusercontent.com/xthor0/scripts/master/bash/post_debian_setup.sh \
-    -O /tmp/post_debian_setup.sh && \
-    bash /tmp/post_debian_setup.sh
+d-i preseed/late_command string wget -q https://raw.githubusercontent.com/xthor0/scripts/master/bash/post_debian_setup.sh \
+    -O /target/tmp/post_debian_setup.sh && chmod 755 /target/tmp/post_debian_setup.sh ; \
+    in-target /bin/bash /tmp/post_debian_setup.sh
