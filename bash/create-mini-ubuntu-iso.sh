@@ -1,23 +1,20 @@
 #!/bin/bash
 
 # variables
-source="http://cdimage.ubuntu.com/releases/18.04.2/release/ubuntu-18.04.2-server-amd64.iso"
-shatxt="http://cdimage.ubuntu.com/releases/18.04.2/release/SHA256SUMS"
-build="$HOME/tmp/ubuntu-iso"
+source="http://archive.ubuntu.com/ubuntu/dists/bionic/main/installer-amd64/current/images/netboot/mini.iso"
+shatxt="http://archive.ubuntu.com/ubuntu/dists/bionic/main/installer-amd64/current/images/SHA256SUMS"
+build="$HOME/tmp/ubuntu-mini-iso"
 shaname=$(basename ${shatxt})
 isoname=$(basename ${source})
 
 # we need command-line options
-while getopts "p:f:c:" opt; do
+while getopts "p:f:" opt; do
 	case $opt in
 		p)
 			preseed=$OPTARG
 			;;
 		f)
 			outfile=$OPTARG
-			;;
-		c)
-			custom=$OPTARG
 			;;
 	esac
 done
@@ -34,12 +31,6 @@ if [ -z "$outfile" ]; then
 	exit 255
 fi
 
-# custom directory containing ssh key and init files
-if [ -z "$custom" ]; then
-    echo "You must specify the full path to the custom dir!"
-    exit 255
-fi
-
 # make sure the preseed file exists
 if [ -f "${preseed}" ]; then
     echo "Using preseed file: ${preseed}"
@@ -49,7 +40,7 @@ else
 fi
 
 # name of output file
-output="ubuntu-${outfile}-$(date +%Y%m%d).iso"
+output="ubuntu-mini-${outfile}-$(date +%Y%m%d).iso"
 
 # create the build directory
 if [ ! -d "${build}" ]; then
@@ -79,7 +70,7 @@ fi
 if [ $? -eq 0 ]; then
     sha256sum -c sha.txt
     if [ $? -ne 0 ]; then
-        echo "Failed to verify SHA512SUM of ${isoname} -- exiting."
+        echo "Failed to verify SHA256SUM of ${isoname} -- exiting."
         exit 255
     fi
 else
@@ -94,27 +85,16 @@ if [ $? -ne 0 ]; then
     exit 255
 fi
 
-# copy in the custom dir
-mkdir x/custom && cp -ar ${custom}/* x/custom
-if [ $? -ne 0 ]; then
-    echo "Failed to copy ${custom} to ISO root -- exiting."
-    exit 255
-fi
-
 # replace isolinux.cfg
-cat << EOF > x/isolinux/isolinux.cfg 
+cat << EOF > x/isolinux.cfg 
 default linux
 timeout 200
 
 label linux
 	menu label ^Install
-    kernel /install/vmlinuz
-    append auto file=/cdrom/preseed.cfg vga=788 initrd=/install/initrd.gz debconf/priority=critical locale=en_US console-setup/ask_detect=false console-setup/layoutcode=us netcfg/choose_interface=auto  
+   	kernel linux
+	append auto url=http://10.187.88.203/ubuntu.cfg vga=788 initrd=initrd.gz debconf/priority=critical locale=en_US console-setup/ask_detect=false console-setup/layoutcode=us netcfg/choose_interface=auto  
 EOF
-if [ $? -ne 0 ]; then
-    echo "Failed to write isolinux.cfg -- exiting."
-    exit 255
-fi
 
 # inject preseed.cfg
 cp ${preseed} x/preseed.cfg
@@ -125,7 +105,7 @@ fi
 
 # generate ISO
 echo "Generating ISO: ${build}/${output}"
-genisoimage -quiet -r -J -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ${build}/${output} x
+genisoimage -quiet -r -J -b isolinux.bin -c boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -o ${build}/${output} x
 if [ $? -eq 0 ]; then
     # cleanup
     rm -rf x ${shaname} sha.txt

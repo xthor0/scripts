@@ -1,0 +1,12 @@
+[Unit]
+Description=Bootstrap Salt
+After=vboxadd.target network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/minion-setup
+RemainAfterExit=true
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
