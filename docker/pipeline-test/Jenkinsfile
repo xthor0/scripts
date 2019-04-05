@@ -1,0 +1,31 @@
+ //SETUP: set the name of the project
+ env.PROJECT_NAME = "docker-test"
+
+//SETUP: set the health URL of the app.
+//used by the docker deploy script to test to make sure deployment was successful - expects HTTP 200 from curl
+env.HEALTHCHECK_RESOURCE_PATH = "/"
+
+@Library("build_tools")
+import com.chghealthcare.*
+def dockerTools = new dockerTools()
+node {
+	dockerTools.setup()
+	try
+	{
+		//Checkout the source code and update the build-tools submodule
+	  utilities.checkoutGit()
+
+	  // Build Docker Image and Push to Registry
+		dockerTools.buildDockerImageAndPushToRegistry()
+
+		//Deploy to Dev Environment
+		dockerTools.deployToDocker(true)
+
+    }
+    catch (e)
+    {
+    	//there was a problem with the build set the result to FAILED
+    	currentBuild.result = "FAILED"
+    	throw e
+    }
+}
