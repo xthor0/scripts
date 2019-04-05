@@ -23,20 +23,8 @@ echo ${newHostName}.lab > /etc/salt/minion_id
 # point the minion at the right master
 echo "master: 10.187.88.10" | tee /etc/salt/minion
 
-# stupid Ubuntu and netplan...
-test -f /etc/machine-id && echo > /etc/machine-id
-netif=$(ip route | grep default | awk '{ print $5 }')
-echo "auto ${netif}" > /etc/network/interfaces && echo "iface ${netif} inet dhcp" >> /etc/network/interfaces
-if [ $? -eq 0 ]; then
-    apt -y install ifupdown && apt -y purge netplan.io && rm -vfr /usr/share/netplan /etc/netplan
-    if [ $? -ne 0 ]; then
-        echo "Error removing netplan"
-        exit 255
-    fi
-else
-    echo "Error writing /etc/network/interfaces"
-    exit 255
-fi
+# regenerate UUID, otherwise Ubuntu acts totally stupid
+rm -f /etc/machine-id && dbus-uuidgen --ensure=/etc/machine-id
 
 # start Salt minion next boot
 systemctl enable salt-minion
@@ -47,8 +35,8 @@ rm /etc/systemd/system/minion-setup.service
 systemctl daemon-reload
 
 # reboot after burying the body
-(sleep 5; reboot &)
-rm ${0}
+(sleep 5; reboot &)&
+rm -f ${0}
 
 # fin
 exit 0

@@ -109,7 +109,7 @@ timeout 200
 label linux
 	menu label ^Install
     kernel /install/vmlinuz
-    append auto file=/cdrom/preseed.cfg vga=788 initrd=/install/initrd.gz debconf/priority=critical locale=en_US console-setup/ask_detect=false console-setup/layoutcode=us netcfg/choose_interface=auto  
+    append auto file=/cdrom/preseed.cfg vga=788 initrd=/install/initrd.gz debconf/priority=critical locale=en_US console-setup/ask_detect=false console-setup/layoutcode=us netcfg/do_not_use_netplan=true
 EOF
 if [ $? -ne 0 ]; then
     echo "Failed to write isolinux.cfg -- exiting."

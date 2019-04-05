@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# display usage
+function usage() {
+    echo "Error: Incorrect options specified!"
+    echo
+	echo "$(basename $0): Build a template for use with VirtualBox."
+    echo
+	echo "Usage:
+
+$(basename $0) -n <name of virtualbox vm> -c <path to ISO>"
+
+	exit 255
+}
+
+
 # we need command-line options
 while getopts "n:c:" opt; do
 	case $opt in
@@ -9,18 +23,14 @@ while getopts "n:c:" opt; do
 		c)
 			iso=$OPTARG
 			;;
+        *)
+            usage;;
 	esac
 done
 
 # validate arguments...
-if [ -z "${name}" ]; then
-	echo "You must specify a name for the template!"
-	exit 255
-fi
-
-if [ -z "${iso}" ]; then
-	echo "You must specify a path to the ISO file!"
-	exit 255
+if [ -z "${name}" -o -z "${iso}" ]; then
+    usage
 fi
 
 if [ ! -f "${iso}" ]; then
@@ -38,11 +48,11 @@ if [ $? -eq 1 ]; then
             if [ $? -eq 0 ]; then
                 VBoxManage createhd --filename ~/VirtualBox\ VMs/${name}/${name}.vdi --size 8000 --format VDI
                 if [ $? -eq 0 ]; then
-                    VBoxManage storagectl ${name} --name "SATA Controller" --add sata --controller IntelAhci
+                    VBoxManage storagectl ${name} --name "SATA Controller" --add sata --controller IntelAhci --portcount 2
                     if [ $? -eq 0 ]; then
                         VBoxManage storageattach ${name} --storagectl "SATA Controller" --port 0 --device 0 --type hdd --medium ~/VirtualBox\ VMs/${name}/${name}.vdi
                         if [ $? -eq 0 ]; then
-                            VBoxManage storageattach ${name} --storagectl "SATA Controller" --port 1 --device 0 --type dvddrive --medium /home/xthor/tmp/ubuntu-iso/ubuntu-vbox-20190402.iso
+                            VBoxManage storageattach ${name} --storagectl "SATA Controller" --port 1 --device 0 --type dvddrive --medium "${iso}"
 vboxmanage startvm ${name}
                             if [ $? -eq 0 ]; then
                                 retval=0
