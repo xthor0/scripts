@@ -6,8 +6,21 @@ shatxt="${source}/SHA512SUMS"
 build="$HOME/tmp/debian-iso"
 shaname=$(basename ${shatxt})
 
+# display usage
+function usage() {
+    echo "Error: Incorrect options specified!"
+    echo
+	echo "$(basename $0): Build a Debian ISO with fully automated preseed conf."
+    echo
+	echo "Usage:
+
+$(basename $0) -p <full path to preseed file> -f <append name to iso> -c <full path to custom scripts to embed in iso>"
+
+	exit 255
+}
+
 # we need command-line options
-while getopts "p:f:" opt; do
+while getopts "p:f:c:" opt; do
 	case $opt in
 		p)
 			preseed=$OPTARG
@@ -15,19 +28,15 @@ while getopts "p:f:" opt; do
 		f)
 			outfile=$OPTARG
 			;;
+		c)
+			custom=$OPTARG
+			;;
 	esac
 done
 
 # validate arguments...
-if [ -z "${preseed}" ]; then
-	echo "You must specify the location of a Debian preseed file with the -p option!"
-	exit 255
-fi
-
-if [ -z "$outfile" ]; then
-	echo "You must specify the base output file name with -f"
-	echo "example: $(basename $0) -f vbox -- output file: debian-vbox-$(date +%Y%m%d).iso"
-	exit 255
+if [ -z "${preseed}" -o -z "${outfile}" -o -z "${custom}" ]; then
+    usage
 fi
 
 # make sure the preseed file exists
@@ -82,6 +91,13 @@ fi
 7z -ox x ${isoname}
 if [ $? -ne 0 ]; then
     echo "Failed to extract ${isoname} -- exiting."
+    exit 255
+fi
+
+# copy in the custom dir
+mkdir x/custom && cp -ar ${custom}/* x/custom
+if [ $? -ne 0 ]; then
+    echo "Failed to copy ${custom} to ISO root -- exiting."
     exit 255
 fi
 
