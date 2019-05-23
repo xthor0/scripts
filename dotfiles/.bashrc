@@ -41,7 +41,24 @@ export PATH=$PATH:$HOME/bin
 # ls colors
 export LSCOLORS=gxBxhxDxfxhxhxhxhxcxcx
 
+# linuxbrew
+test -f /home/linuxbrew/.linuxbrew/bin/brew && eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+
+# awless
+which awless >& /dev/null
+if [ $? -eq 0 ]; then
+  source <(awless completion bash)
+fi
+
+# terraform bash completion
+which terraform >& /dev/null
+if [ $? -eq 0 ]; then
+  complete -C $(which terraform) terraform
+fi
+
 # aliases
 alias ls="ls --color"
 alias npw="pwgen 8 1"
-alias sshnosave="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+alias sshnosave="ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+alias aws-regions="aws --profile personal ec2 describe-regions --output table"
+
