@@ -1,22 +1,33 @@
 #!/bin/bash
 
-# and away we go!
+# set up external monitors, if they are attached
+# it's a hack. what can I say. At home, and at work, I have 2x external 4k monitors.
+# so, if there are 3 connected at login... I'll just assume they are my 4k monitors. :)
+if [ $(xrandr -q | grep -w connected | wc -l) -eq 3 ]; then
+  #xrandr --output HDMI-2 --off --output HDMI-1 --off --output DP-1 --primary --mode 3840x2160 --pos 0x0 --rotate normal --output eDP-1 --mode 1920x1080 --pos 0x2160 --rotate normal --output DP-2 --mode 3840x2160 --pos 3840x0 --rotate normal
+  xrandr --output VIRTUAL1 --off --output eDP1 --mode 1920x1080 --pos 7680x0 --rotate normal --output DP1 --primary --mode 3840x2160 --pos 0x0 --rotate normal --output HDMI2 --off --output HDMI1 --off --output DP2 --mode 3840x2160 --pos 3840x0 --rotate normal
+else
+  # override the DPI settings, so we can actually SEE the fonts.
+  # I did a lot of googles... as of 2019.05.28, there is no way for Linux
+  # to run multiple displays with differing DPI settings - BUMMER
+  echo 'Xft.dpi: 144' | xrdb -override
+fi
 
+/usr/lib64/xfce4/notifyd/xfce4-notifyd &
+
+# restore background
 nitrogen --restore &
 compton -b
 tint2 &
 
-conky &
+# conky is already configured in the autostart section...
+# conky --daemonize --pause=1
 
-# fix touchpad
-xinput set-prop 12 "libinput Click Method Enabled" 0 1
+# fix touchpad so I can right-click with 2 fingers
+# you'll have to adjust the ID: xinput list | grep -i touchpad, find id for the one you want to tweak
+xinput set-prop 13 "libinput Click Method Enabled" 0 1
 
-# this needs help, I think - volumeicon probably won't start 
-# throws an error about not being able to connect to pulseaudio I think
-sleep 2
-volumeicon &
+xscreensaver &
+
 xfce4-power-manager &
-
-# screen locker
-xautolock -time 10 -locker ~/git/i3lock-fancy/lock &
-xss-lock ~/git/i3lock-fancy/lock &
+# FIN
