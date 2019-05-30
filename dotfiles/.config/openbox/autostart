@@ -24,7 +24,7 @@ tint2 &
 # conky --daemonize --pause=1
 
 # prompt for SSH passphrase, if key exists
-(test -f $HOME/.ssh/id_ras && ssh-add) &
+(test -f $HOME/.ssh/id_rsa && ssh-add) &
 
 # fix touchpad so I can right-click with 2 fingers
 # you'll have to adjust the ID: xinput list | grep -i touchpad, find id for the one you want to tweak
