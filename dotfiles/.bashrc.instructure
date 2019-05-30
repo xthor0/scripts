@@ -25,7 +25,7 @@ function window_title() {
 #
 # Since history is saved on each prompt, this additionally protects it from
 # terminal crashes.
-
+# stolen shamelessly: https://gist.github.com/jan-warchol/89f5a748f7e8a2c9e91c9bc1b358d3ec
 
 # keep unlimited shell history because it's very useful
 export HISTCONTROL=ignoredups:erasedups  # no duplicate entries
