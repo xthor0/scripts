@@ -6,15 +6,15 @@ function usage() {
 	echo "Usage:
 
 `basename $0` -s <seconds> [ -m <message> ]
--s: Seconds to wait
+-t: Time measurement (10s, 5m, 6h, 2d - don't ask me why I implemented days, I doubt I'll ever use it)
 -m: Message to show (optional)"
 	exit 255
 }
 
 # get command-line args
-while getopts "s:m:" OPTION; do
+while getopts "t:m:" OPTION; do
 	case $OPTION in
-		s) seconds=${OPTARG};;
+		t) time=${OPTARG};;
 		m) message="${OPTARG}";;
 		*) usage;;
 	esac
@@ -29,7 +29,7 @@ for binary in notify-send zenity; do
   fi
 done
 
-if [ -z "$seconds" ]; then
+if [ -z "${time}" ]; then
   usage
 fi
 
@@ -37,12 +37,26 @@ if [ -z "$message" ]; then
   message="Finished!"
 fi
 
+# convert time unit to seconds
+i=$((${#time}-1))
+unit="${time:$i:1}"
+value="${time:0:$i}"
+
+case "${unit}" in
+  s) seconds=${value};;
+  m) seconds=$((${value} * 60));;
+  h) seconds=$((${value} * 3600));;
+  d) seconds=$((${value} * 86400));;
+  *) usage;;
+esac
+
 future=$((`date +%s` + $seconds))
-ends=$(date -d @$future +%l:%M:%S\ %p)
+#ends=$(date -d @$future +%l:%M:%S\ %p)
+ends=$(date -d @$future)
 
 while [ "$future" -ne `date +%s` ]; do
   remains=$(($future - `date +%s`))
-  printf "%-12s %-15s %-20s %3d\r" "Timer ends:" "${ends}" "Seconds remaining:" ${remains}
+  printf "%-12s %-35s %-20s %3d\r" "Timer ends:" "${ends}" "Seconds remaining:" ${remains}
   sleep .1
 done
 
