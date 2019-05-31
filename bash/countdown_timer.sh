@@ -37,17 +37,20 @@ if [ -z "$message" ]; then
   message="Finished!"
 fi
 
-date1=$((`date +%s` + $seconds))
+future=$((`date +%s` + $seconds))
+ends=$(date -d @$future +%l:%M:%S\ %p)
 
-while [ "$date1" -ne `date +%s` ]; do
-  # echo -ne "$(date --date @$(($date1 - `date +%s` - 19800 )) +%H:%M:%S)\r"
-  remains=$(expr $date1 - `date +%s`)
-  echo -ne "Remaining seconds: ${remains}\r"
+while [ "$future" -ne `date +%s` ]; do
+  remains=$(($future - `date +%s`))
+  printf "%-12s %-15s %-20s %3d\r" "Timer ends:" "${ends}" "Seconds remaining:" ${remains}
   sleep .1
 done
 
-notify-send 'Countdown' "$message"
-zenity --info --title "Countdown" --text "$message" &
+# newline to make formatting look nice
+echo
+
+notify-send 'Timer Done' "$message"
+zenity --info --title "Timer Done" --text "$message" &
 
 # end
 
