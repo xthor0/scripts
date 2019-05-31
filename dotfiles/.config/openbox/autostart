@@ -5,7 +5,7 @@
 # so, if there are 3 connected at login... I'll just assume they are my 4k monitors. :)
 if [ $(xrandr -q | grep -w connected | wc -l) -eq 3 ]; then
   #xrandr --output HDMI-2 --off --output HDMI-1 --off --output DP-1 --primary --mode 3840x2160 --pos 0x0 --rotate normal --output eDP-1 --mode 1920x1080 --pos 0x2160 --rotate normal --output DP-2 --mode 3840x2160 --pos 3840x0 --rotate normal
-  xrandr --output VIRTUAL1 --off --output eDP1 --mode 1920x1080 --pos 7680x0 --rotate normal --output DP1 --primary --mode 3840x2160 --pos 0x0 --rotate normal --output HDMI2 --off --output HDMI1 --off --output DP2 --mode 3840x2160 --pos 3840x0 --rotate normal
+  xrandr --output VIRTUAL1 --off --output eDP1 --off --output DP1 --primary --mode 3840x2160 --pos 0x0 --rotate normal --output HDMI2 --off --output HDMI1 --off --output DP2 --mode 3840x2160 --pos 3840x0 --rotate normal
 else
   # override the DPI settings, so we can actually SEE the fonts.
   # I did a lot of googles... as of 2019.05.28, there is no way for Linux
