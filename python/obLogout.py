@@ -24,6 +24,10 @@ class DoTheLogOut:
     def shutdown(self, widget):
         os.system("systemctl poweroff && openbox --exit")
 
+    # Suspend
+    def suspend(self, widget):
+        os.system("systemctl suspend")
+
     def __init__(self):
         # Create a new window
         self.window = gtk.Window(gtk.WINDOW_TOPLEVEL)
@@ -64,6 +68,13 @@ class DoTheLogOut:
         self.button4.connect("clicked", self.shutdown)
         self.box1.pack_start(self.button4, True, True, 0)
         self.button4.show()
+
+        # Create suspend button
+        self.button5 = gtk.Button("Suspend")
+        self.button5.set_border_width(10)
+        self.button5.connect("clicked", self.suspend)
+        self.box1.pack_start(self.button5, True, True, 0)
+        self.button5.show()
 
         self.box1.show()
         self.window.show()

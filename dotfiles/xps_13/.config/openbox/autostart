@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# necessary if we want notifications from libnotify
+/usr/lib64/xfce4/notifyd/xfce4-notifyd &
+
+# restore background
+nitrogen --restore &
+
+# compositor for tear-free windows and some basic effects
+compton -b
+
+# a status bar with icons/time
+tint2 &
+
+# launch conky, but with a delay to give the screens some time to come up
+sleep 2 && conky &
+
+# prompt for SSH passphrase, if key exists
+(test -f $HOME/.ssh/id_rsa && ssh-add) &
+
+# fix touchpad so I can right-click with 2 fingers
+# you'll have to adjust the ID: xinput list | grep -i touchpad, find id for the one you want to tweak
+xinput set-prop 12 "libinput Click Method Enabled" 0 1
+
+# screensaver daemon
+xscreensaver &
+
+# power management, which really just gives us battery status
+# xscreensaver is handling the power management of the monitors for me
+xfce4-power-manager &
+
+# bluetooth icon
+/usr/bin/blueman-applet &
+
+# screenshot tool
+flameshot &
+
+# FIN
