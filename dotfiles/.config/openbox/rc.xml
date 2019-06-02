@@ -359,11 +359,40 @@
         <command>flameshot gui</command>
       </action>
     </keybind>
+    <!-- show the menu when the menu key is pressed (next to windows on my kb) -->
     <keybind key="Menu">
       <action name="ShowMenu">
         <menu>root-menu</menu>
       </action>
     </keybind>
+    <!-- end menu pop -->
+    <!-- make the play, previous, and next keys work with playerctl -->
+    <keybind key="XF86AudioPlay">
+      <action name="Execute">
+        <command>playerctl play-pause</command>
+      </action>
+    </keybind>
+    <keybind key="XF86AudioPrev">
+      <action name="Execute">
+        <command>playerctl previous</command>
+      </action>
+    </keybind>
+    <keybind key="XF86AudioNext">
+      <action name="Execute">
+        <command>playerctl next</command>
+      </action>
+    </keybind>
+    <keybind key="XF86Calculator">
+      <action name="Execute">
+        <command>mate-calc</command>
+      </action>
+    </keybind>
+    <keybind key="W-l">
+      <action name="Execute">
+        <command>xscreensaver-command -lock</command>
+      </action>
+    </keybind>
+    <!-- end media keys -->
   </keyboard>
   <mouse>
     <dragThreshold>1</dragThreshold>
