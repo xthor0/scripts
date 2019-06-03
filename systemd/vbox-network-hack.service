@@ -1,0 +1,15 @@
+[Unit]
+Description=VBox Networking Hack - this will bring up vboxnet0 before networking, hopefully
+Before=network.target
+After=vboxdrv.target
+
+[Service]
+Type=forking
+ExecStart="su bbrown -c 'vboxmanage list vms >& /dev/null'"
+RemainAfterExit=True
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=vbox-network-hack
+
+[Install]
+WantedBy=multi-user.target

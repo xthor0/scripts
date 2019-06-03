@@ -1,0 +1,14 @@
+[Unit]
+Description=Start 
+After=network.target vbox-network-hack.tartget
+
+[Service]
+Type=forking
+ExecStart="/usr/sbin/iptables -t nat -A POSTROUTING -o $(/usr/sbin/ip route | /usr/bin/grep default | /usr/bin/awk '{ print $5 }') -j MASQUERADE"
+RemainAfterExit=True
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=iptables-nat-vbox
+
+[Install]
+WantedBy=multi-user.target
