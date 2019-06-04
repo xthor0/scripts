@@ -77,7 +77,13 @@ fi
 
 # prompt
 if [ -n "$VAULTED_ENV" ]; then
-	PS1='\[\033[00m\][\[\033[01;92m\]vault: \[\033[01;31m\]${VAULTED_ENV}\[\033[00m\]] \[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+  which datediff >& /dev/null
+  if [ $? -eq 0 ]; then
+    VAULT_DATE_EXP_HUMAN=$(datediff now ${VAULTED_ENV_EXPIRATION} -f%Hh\ %Mm)
+    PS1='\[\033[00m\][\[\033[01;92m\] vault: \[\033[01;37;1;44m\]${VAULTED_ENV}\[\033[00m\] || \[\033[01;92m\]expires: \[\033[01;36m\]$(datediff now ${VAULTED_ENV_EXPIRATION} -f%Hh\ %Mm) \[\033[00m\]]\n\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+  else
+    PS1='\[\033[00m\][\[\033[01;92m\]vault: \[\033[01;37;1;44m\]${VAULTED_ENV}\[\033[00m\]] \[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+  fi
 else
 	if [ "$TERM" == "xterm-256color" ]; then
 		PS1='\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
