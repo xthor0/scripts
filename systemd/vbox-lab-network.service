@@ -1,0 +1,14 @@
+[Unit]
+Description=Set up networking for virtualbox lab
+After=vboxdrv.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vbox-lab-network.sh
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=vbox-lab-network
+
+[Install]
+WantedBy=multi-user.target
+
