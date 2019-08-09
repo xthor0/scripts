@@ -75,21 +75,62 @@ if [ -n "$orphaned_files" ]; then
   echo "done."
 fi
 
-# prompt
-if [ -n "$VAULTED_ENV" ]; then
-  which datediff >& /dev/null
-  if [ $? -eq 0 ]; then
-    VAULT_DATE_EXP_HUMAN=$(datediff now ${VAULTED_ENV_EXPIRATION} -f%Hh\ %Mm)
-    PS1='\[\033[00m\][\[\033[01;92m\] vault: \[\033[01;37;1;44m\]${VAULTED_ENV}\[\033[00m\] || \[\033[01;92m\]expires: \[\033[01;36m\]$(datediff now ${VAULTED_ENV_EXPIRATION} -f%Hh\ %Mm) \[\033[00m\]]\n\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+function comment() {
+  if [ -n "$VAULTED_ENV" ]; then
+    which datediff >& /dev/null
+    if [ $? -eq 0 ]; then
+      VAULT_DATE_EXP_HUMAN=$(datediff now ${VAULTED_ENV_EXPIRATION} -f%Hh\ %Mm)
+      PS1='\[\033[00m\][\[\033[01;92m\] vault: \[\033[01;37;1;44m\]${VAULTED_ENV}\[\033[00m\] || \[\033[01;92m\]expires: \[\033[01;36m\]$(datediff now ${VAULTED_ENV_EXPIRATION} -f%Hh\ %Mm) \[\033[00m\]]\n\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+    else
+      PS1='\[\033[00m\][\[\033[01;92m\]vault: \[\033[01;37;1;44m\]${VAULTED_ENV}\[\033[00m\]] \[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+    fi
   else
-    PS1='\[\033[00m\][\[\033[01;92m\]vault: \[\033[01;37;1;44m\]${VAULTED_ENV}\[\033[00m\]] \[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+    if [ "$TERM" == "xterm-256color" ]; then
+      PS1='\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+    else
+      PS1="[\u@\h \W]\\$ "
+    fi
+  fi
+}
+
+# vaulted prompt
+function vaulted_prompt() {
+  if [ -n "$VAULTED_ENV" ]; then
+    which datediff >& /dev/null
+    if [ $? -eq 0 ]; then
+      VAULTED_PROMPT='\[\033[00m\][\[\033[01;92m\] vault: \[\033[01;37;1;44m\]${VAULTED_ENV}\[\033[00m\] || \[\033[01;92m\]expires: \[\033[01;36m\]$(datediff now ${VAULTED_ENV_EXPIRATION} -f%Hh\ %Mm) \[\033[00m\]]\n'
+    else
+      VAULTED_PROMPT='\[\033[00m\][\[\033[01;92m\] vault: \[\033[01;37;1;44m\]${VAULTED_ENV}\[\033[00m\] || \[\033[01;92m\]expires: \[\033[01;36m\]$(date -d ${VAULTED_ENV_EXPIRATION} +%r) \[\033[00m\]]\n'
+    fi
+    echo ${VAULTED_PROMPT}
+  fi
+}
+
+
+# rapture prompt
+function rapture_prompt() {
+  if [ -n "$RAPTURE_ROLE" ]; then
+    RAPTURE_PROMPT='\[\033[00m\][\[\033[01;92m\] Assumed Role: \[\033[01;31m\]${RAPTURE_ROLE} \[\033[00m\]]\n'
+    echo ${RAPTURE_PROMPT}
+  fi
+}
+
+# standard prompts
+COLOR_PROMPT='\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
+STANDARD_PROMPT="[\u@\h \W]\\$ "
+
+# wrap it
+function set_bash_prompt() {
+  PS1="$(vaulted_prompt)$(rapture_prompt)${COLOR_PROMPT}"
+}
+
+# set it
+if [ "$TERM" == "xterm-256color" ]; then
+  if [[ "$PROMPT_COMMAND" != set_bash_prompt* ]]; then
+    export PROMPT_COMMAND="set_bash_prompt; $PROMPT_COMMAND"
   fi
 else
-	if [ "$TERM" == "xterm-256color" ]; then
-		PS1='\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
-	else
-		PS1="[\u@\h \W]\\$ "
-	fi
+  PS1="${STANDARD_PROMPT}"
 fi
 
 # bash completion
@@ -98,13 +139,16 @@ fi
 #fi
 
 # path
-export PATH=$PATH:$HOME/bin
+export PATH=$PATH:$HOME/bin:$HOME/.local/bin
 
 # ls colors
 export LSCOLORS=gxBxhxDxfxhxhxhxhxcxcx
 
 # linuxbrew
 test -f /home/linuxbrew/.linuxbrew/bin/brew && eval $(/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+
+# rapture
+eval "$( command rapture shell-init )"
 
 # awless
 which awless >& /dev/null
@@ -118,9 +162,24 @@ if [ $? -eq 0 ]; then
   complete -C $(which terraform) terraform
 fi
 
+# jira bash completion
+which jira >& /dev/null
+if [ $? -eq 0 ]; then
+  eval "$(jira --completion-script-bash)"
+fi
+
+# vault bash completion
+if [ -f /home/bbrown/bin/vault ]; then
+  complete -C /home/bbrown/bin/vault vault
+fi
+
 # aliases
 alias ls="ls --color"
 alias npw="pwgen 8 1"
 alias sshnosave="ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 alias aws-regions="aws --region us-west-2 ec2 describe-regions --output table"
+alias vault_auth='vault login -method=ldap username=bbrown'
 
+# variables
+export ANSIBLE_VAULT_PASSWORD_FILE=$HOME/git/inst/rundmc/.vault-pass.key
+export VAULT_ADDR=https://vault.insops.net

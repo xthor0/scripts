@@ -88,11 +88,20 @@ ${font sans-serif:normal:size=8}/home $alignc ${fs_used /home} / ${fs_size /home
 ${fs_bar /home}
 
 
-${font sans-serif:bold:size=8}NETWORK ${hr 2}
+${font sans-serif:bold:size=8}NETWORK ${hr 2}${if_existing /sys/class/net/wlp2s0/operstate up}
 ${font sans-serif:normal:size=8}IP address: $alignr ${addr wlp2s0}
 ESSID: $alignr ${wireless_essid wlp2s0}
 Connection quality: $alignr ${wireless_link_qual_perc wlp2s0}%
 ${downspeedgraph wlp2s0 99cc33 006600}
 DLS:${downspeed wlp2s0} kb/s $alignr total: ${totaldown wlp2s0}
 ${upspeedgraph wlp2s0  ffcc00 ff0000}
-ULS:${upspeed wlp2s0} kb/s $alignr total: ${totalup wlp2s0}
+ULS:${upspeed wlp2s0} kb/s $alignr total: ${totalup wlp2s0}${endif}
+${hr 2}${if_existing /sys/class/net/enp0s20f0u2u3/operstate up}
+${font sans-serif:normal:size=8}IP address: $alignr ${addr enp0s20f0u2u3}
+ESSID: $alignr ${wireless_essid enp0s20f0u2u3}
+Connection quality: $alignr ${wireless_link_qual_perc enp0s20f0u2u3}%
+${downspeedgraph enp0s20f0u2u3 99cc33 006600}
+DLS:${downspeed enp0s20f0u2u3} kb/s $alignr total: ${totaldown enp0s20f0u2u3}
+${upspeedgraph enp0s20f0u2u3  ffcc00 ff0000}
+ULS:${upspeed enp0s20f0u2u3} kb/s $alignr total: ${totalup enp0s20f0u2u3}
+${endif}
