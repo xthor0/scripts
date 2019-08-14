@@ -26,9 +26,6 @@ firstboot --disable
 # Keyboard layouts
 keyboard --vckeymap=us --xlayouts='us'
 
-# Disable firewall (We use hardware firewalls)
-firewall --disabled
-
 # Set SELinux to enforcing (Which is default)
 selinux --enforcing
 
@@ -63,6 +60,9 @@ deltarpm
 yum-plugin-fastestmirror
 epel-release
 dnsmasq
+bind-utils
+tcpdump
+lighttpd
 # the below was stolen shamelessly from https://www.centos.org/forums/viewtopic.php?t=47262 (last post)
 -aic94xx-firmware*
 -alsa-*
@@ -105,18 +105,17 @@ domain=lab
 dhcp-option=6,10.187.88.1
 dhcp-range=10.187.88.20,10.187.88.250,2h
 dhcp-option=3,10.187.88.1
+no-resolv
+host-record=salt-master,salt-master.lab,10.187.88.10
+cname=salt.lab,salt-master.lab
+server=8.8.8.8
 EOF
 
-cat << EOF >> /etc/rc.d/rc.local
-# hacky hack way to make this box a router for virtualbox lab...
-iptables -t nat -A POSTROUTING -o enp0s3 -j MASQUERADE
-EOF
-
-# ip forwarding
-echo net.ipv4.ip_forward=1 > /etc/sysctl.d/98-ip-forward.conf
-
-# Make sure new rc.local is also executable
-chmod 755 /etc/rc.d/rc.local
+# firewall setup
+nmcli c mod 'System enp0s3' connection.zone external
+nmcli c mod 'System enp0s8' connection.zone internal
+firewall-cmd --zone=external --add-masquerade --permanent
+firewall-cmd --zone=internal --add-service=dns --add-service=dhcp --permanent
 
 # End of kickstart script
 %end
