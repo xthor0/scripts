@@ -9,10 +9,9 @@ repo --name=epel --baseurl=http://download.fedoraproject.org/pub/epel/7/x86_64
 # force text mode, please
 text
 
-# can we put network here? we may have to move it - if we don't do this the system boots without a NIC
-network --onboot yes --device=enp0s3 --bootproto=dhcp --noipv6 --activate
-network  --bootproto=static --device=enp0s8 --ip=10.187.88.1 --netmask=255.255.255.0 --noipv6 --activate
-network  --hostname=router.lab
+# network config
+network  --bootproto=static --device=enp0s8 --hostname=router.lab --ip=10.187.88.1 --netmask=255.255.255.0 --noipv6 --activate
+network  --bootproto=dhcp --device=enp0s3 --noipv6 --activate
 
 # System authorization information
 auth --enableshadow --passalgo=sha512
@@ -26,9 +25,6 @@ firstboot --disable
 # Keyboard layouts
 keyboard --vckeymap=us --xlayouts='us'
 
-# Disable firewall (We use hardware firewalls)
-firewall --disabled
-
 # Set SELinux to enforcing (Which is default)
 selinux --enforcing
 
@@ -41,6 +37,9 @@ bootloader --location=mbr --driveorder=sda
 # Set the root password
 rootpw p@ssw0rd
 
+# enable logging so we can see what happened
+logging --level=debug
+
 # disk configuration - designed to fit in default 8GB VDI that VBox creates :)
 clearpart --drives=sda --all --initlabel
 part /boot --fstype="ext4"  --ondisk=sda --size=512
@@ -50,6 +49,9 @@ logvol /    --fstype="ext4" --name="root" --vgname="vg0" --size=4096 --grow
 
 # Reboot after installation
 reboot --eject
+
+# enable firewalld service  
+firewall --enable
 
 %packages
 @core --nodefaults
@@ -63,6 +65,9 @@ deltarpm
 yum-plugin-fastestmirror
 epel-release
 dnsmasq
+bind-utils
+tcpdump
+lighttpd
 # the below was stolen shamelessly from https://www.centos.org/forums/viewtopic.php?t=47262 (last post)
 -aic94xx-firmware*
 -alsa-*
@@ -79,12 +84,12 @@ dnsmasq
 -NetworkManager-wifi
 %end
 
-%post
+%post --log=/root/ks-post.log
 # add my ssh pubkey to this server
 mkdir -m0700 /root/.ssh/
 
 cat <<EOF >/root/.ssh/authorized_keys
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfu9au0EkA02pnruvqLcquikJim4VgQg61YxwG0LauDv+qM0j4EPDfzQtN3GMfyPs/i79NeNNndvfc2vqYJt8sVwjegoNF9h8jDytaWZ7zzblhY7qBkwtAVZ6ADgTY/w28CkB80dRPey2E4FGxING6AzieYwoHsKmaMt6IumOJlo01HoeouW7OP8qg51n8EHKmov5oA4DzzDx/UkS0aDDKpp38hIj0DHkcK8jhi5eZoEM7hOgaW+Efj6t/XzpoOhQVytsJXxqzZ/+4UDVfJ3FTQLmI+hdymbyxYL5i2FCK5kMldGyZuZz9h9ikM9xHWSmKIeTevut9/chveUR/W/E2qqziqm8fCoZZ2WIHfhy+Bt0OcLUro2Gpe7S0i8uCbvNK60OpE+hf9GxAv+G0UUCuSxJtKqrpgi5xNifvXaT3pk5Uxr/1+g+tiMyoaZxCmJPz7IZU7y9lurTAhYT0HgkcU4OZpGS1/x+rGu2f0un3UkUJyYFpgjfjw9iu9Y/0H7k= bbrown@bbrown-l
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSUppn5b2njEQSw8FHqyZ0OZiPD14wEejulwnQ7gxLdQYJEqXMleHx4u/9ff3/jDXoGaBFiT2LmUTnpMV8HSj4jsB4PCoFAbq4XnlnwyBx7va/8LQOMdKsjF5W6peO+DYKh+ow9YaJvctzGPebkkNvhI0YFhZod58uoO7lyTnQXkMm8DXl6q7WhNfsZZiwr7tXicUZojU0msMiDpX1JvhGow+mKym0U/6cMgozypYfNbQ2PVkfNnadslp29O5Mfd5X4U+cbACa1sUYYqOT2Zz8C4t5QFXRY1LNokmRbcqbO01bygbE4S2TDnvRz+XZmfZTuw9MMgp7JPfo6cOfDYKf xthor0-ssh-key
 EOF
 
 ### set permissions
@@ -92,9 +97,6 @@ chmod 0600 /root/.ssh/authorized_keys
 
 ### fix up selinux context
 restorecon -R /root/.ssh/
-
-### firewall should be off. We can always turn it back on with Salt later.
-systemctl disable firewalld
 
 ### turn on dnsmasq
 systemctl enable dnsmasq
@@ -105,18 +107,21 @@ domain=lab
 dhcp-option=6,10.187.88.1
 dhcp-range=10.187.88.20,10.187.88.250,2h
 dhcp-option=3,10.187.88.1
+no-resolv
+host-record=salt-master,salt-master.lab,10.187.88.10
+cname=salt.lab,salt-master.lab
+server=8.8.8.8
 EOF
 
-cat << EOF >> /etc/rc.d/rc.local
-# hacky hack way to make this box a router for virtualbox lab...
-iptables -t nat -A POSTROUTING -o enp0s3 -j MASQUERADE
-EOF
-
-# ip forwarding
-echo net.ipv4.ip_forward=1 > /etc/sysctl.d/98-ip-forward.conf
-
-# Make sure new rc.local is also executable
-chmod 755 /etc/rc.d/rc.local
-
-# End of kickstart script
+# add a few firewall rules
+# NOTE: regarding firewall-offline-cmd, the below commands SHOULD work
+# unfortunately, they don't. I'm not the only one: https://serverfault.com/questions/838710/nmcli-is-not-working-in-kickstart-script
+#firewall-offline-cmd --zone=trusted --change-interface=enp0s8
+firewall-offline-cmd --zone=public --add-masquerade
+echo 'ZONE=trusted' >> /etc/sysconfig/network-scripts/ifcfg-enp0s8
 %end
+
+# this allows the log file to persist a reboot... seriously, RedHat, this should be an option without the hack
+%post --nochroot
+cp /tmp/anaconda.log /mnt/sysimage/root/anaconda.log
+%end 
