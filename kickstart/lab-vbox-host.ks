@@ -10,8 +10,7 @@ repo --name=epel --baseurl=http://download.fedoraproject.org/pub/epel/7/x86_64
 text
 
 # network config
-network  --bootproto=static --device=enp0s8 --hostname=router.lab --ip=10.187.88.1 --netmask=255.255.255.0 --noipv6 --activate
-network  --bootproto=dhcp --device=enp0s3 --noipv6 --activate
+network  --bootproto=dhcp --device=eno1 --hostname=spinne.xthorsworld.com --noipv6 --activate
 
 # System authorization information
 auth --enableshadow --passalgo=sha512
@@ -32,7 +31,7 @@ selinux --enforcing
 timezone America/Denver --isUtc
 
 # We are the boot loader
-bootloader --location=mbr --driveorder=sda
+bootloader --location=mbr --driveorder=nvme0n1
 
 # Set the root password
 rootpw p@ssw0rd
@@ -41,11 +40,14 @@ rootpw p@ssw0rd
 logging --level=debug
 
 # disk configuration - designed to fit in default 8GB VDI that VBox creates :)
-clearpart --drives=sda --all --initlabel
-part /boot --fstype="ext4"  --ondisk=sda --size=512
-part pv.2  --fstype="lvmpv" --ondisk=sda --size=1   --grow
+clearpart --drives=nvme0n1 --all --initlabel
+part /boot --fstype="xfs"  --ondisk=nvme0n1 --size=1024
+part pv.2  --fstype="lvmpv" --ondisk=nvme0n1 --size=1   --grow
 volgroup vg0 --pesize=4096 pv.2
-logvol /    --fstype="ext4" --name="root" --vgname="vg0" --size=4096 --grow
+logvol /      --fstype="xfs" --name="root" --vgname="vg0" --size=16384 # 16GB root 
+logvol /var   --fstype="xfs" --name="var" --vgname="vg0" --size=8192 # 8GB for var, probably too much
+logvol swap   --vgname="vg0" --size=2048 --name=swap # 2GB swap
+logvol /home  --fstype="xfs" --name="home" --vgname="vg0" --size=4096 --grow # home gets everything else
 
 # Reboot after installation
 reboot --eject
@@ -64,7 +66,6 @@ rsync
 deltarpm
 yum-plugin-fastestmirror
 epel-release
-dnsmasq
 bind-utils
 tcpdump
 lighttpd
@@ -78,20 +79,6 @@ bzip2
 p7zip-plugins
 httpd
 php
-# the below was stolen shamelessly from https://www.centos.org/forums/viewtopic.php?t=47262 (last post)
--aic94xx-firmware*
--alsa-*
--biosdevname
--btrfs-progs*
--dracut-network
--iprutils
--ivtv*
--iwl*firmware
--libertas*
--kexec-tools
--plymouth*
--postfix
--NetworkManager-wifi
 %end
 
 %post --log=/root/ks-post.log
@@ -107,28 +94,6 @@ chmod 0600 /root/.ssh/authorized_keys
 
 ### fix up selinux context
 restorecon -R /root/.ssh/
-
-### turn on dnsmasq
-systemctl enable dnsmasq
-
-### create config file for dnsmasq
-cat << EOF > /etc/dnsmasq.d/lab.conf
-domain=lab
-dhcp-option=6,10.187.88.1
-dhcp-range=10.187.88.20,10.187.88.250,2h
-dhcp-option=3,10.187.88.1
-no-resolv
-host-record=salt-master,salt-master.lab,10.187.88.10
-cname=salt.lab,salt-master.lab
-server=8.8.8.8
-EOF
-
-# add a few firewall rules
-# NOTE: regarding firewall-offline-cmd, the below commands SHOULD work
-# unfortunately, they don't. I'm not the only one: https://serverfault.com/questions/838710/nmcli-is-not-working-in-kickstart-script
-#firewall-offline-cmd --zone=trusted --change-interface=enp0s8
-firewall-offline-cmd --zone=public --add-masquerade
-echo 'ZONE=trusted' >> /etc/sysconfig/network-scripts/ifcfg-enp0s8
 
 # install the cloudinit php script 
 systemctl enable httpd 
@@ -157,57 +122,11 @@ runcmd:
 ?>
 EOF
 
-# install virtualbox extensions on first boot 
-# script to install vbox guest additions
-# dear Oracle, why do you make this so damn difficult?
-cp /etc/rc.d/rc.local /tmp/rc.local.bkup
-cat > /etc/rc.d/rc.local << EOF
-#!/bin/bash
-exec < /dev/tty6 > /dev/tty6
-chvt 6
+# install virtualbox repo
+curl http://download.virtualbox.org/virtualbox/rpm/rhel/virtualbox.repo | tee /etc/yum.repos.d/virtualbox.repo
 
-echo "Installing VirtualBox guest additions, please wait..." > /dev/console
-
-# figure out what the latest version available is
-vb_latest=\$(curl https://download.virtualbox.org/virtualbox/LATEST.TXT)
-
-# download the ISO
-wget -q https://download.virtualbox.org/virtualbox/\${vb_latest}/VBoxGuestAdditions_\${vb_latest}.iso -O /tmp/vbox_guest_addt.iso
-if [ \$? -ne 0 ]; then
-  echo "Unable to download VirtualBox Guest ISO. Exiting." > /dev/console
-  read -p "Press Enter to continue." enterkey
-  chvt 1
-  exit 255
-fi
-
-# make a temp directory
-mkdir /tmp/vbg && cd /tmp/vbg
-
-# extract the ISO
-7z x /tmp/vbox_guest_addt.iso
-
-# run the installer
-if [ -f VBoxLinuxAdditions.run ]; then
-  chmod u+x VBoxLinuxAdditions.run
-  ./VBoxLinuxAdditions.run
-else
-  echo "Error - cannot find VBoxLinuxAdditions.run. Exiting." > /dev/console
-  read -p "Press Enter to continue." enterkey
-  chvt 1
-  exit 255
-fi
-
-# may as well install the latest updates, while we're at it 
-yum -y upgrade
-
-# let's clean up this mess
-rm -rf /tmp/vbg /tmp/vbox_guest_addt.iso
-echo "This server will reboot in 10 seconds."
-cat /tmp/rc.local.bkup | tee /etc/rc.local
-chvt 1
-
-EOF
-chmod 755 /etc/rc.d/rc.local
+# install salt repo
+yum -y install https://repo.saltstack.com/yum/redhat/salt-repo-latest.el7.noarch.rpm 
 
 # install updates 
 yum -y upgrade 
