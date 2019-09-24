@@ -103,11 +103,13 @@ function set_bash_prompt() {
 if [[ "$(__git_ps1)" =~ "*" ]]; then     # if repository is dirty
   __git_branch_color="\[\033[0;31m\]"    # make the git part of the prompt red
 elif [[ "$(__git_ps1)" =~ "$" ]]; then   # if there is something stashed
-  __git_branch_color="\[\033[1;33m\]"    # make it yellow
+  __git_branch_color="\[\033[1;37m\]"    # make it bright white
 elif [[ "$(__git_ps1)" =~ "%" ]]; then   # if there are only untracked files
   __git_branch_color="\[\033[0;35m\]"    # make it magenta
 elif [[ "$(__git_ps1)" =~ "+" ]]; then   # if there are staged files
   __git_branch_color="\[\033[0;36m\]"    # make it cyan
+elif [[ "$(__git_ps1)" =~ ">" ]]; then   # if there are commits waiting to be pushed
+  __git_branch_color="\[\033[1;33m\]"    # make it yellow
 else
   __git_branch_color="\[\033[00;32m\]"   # otherwise, green!
 fi
