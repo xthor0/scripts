@@ -75,14 +75,33 @@ if [ -n "$orphaned_files" ]; then
   echo "done."
 fi
 
-# standard prompts
-COLOR_PROMPT='\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]\$ '
-STANDARD_PROMPT="[\u@\h \W]\\$ "
-
-# wrap it
+# wrap in a function so we can use it in PROMPT_COMMAND
 function set_bash_prompt() {
-  PS1="${COLOR_PROMPT}"
+# colour branch name depending on state
+if [[ "$(__git_ps1)" =~ "*" ]]; then     # if repository is dirty
+  __git_branch_color="\[\033[0;31m\]"    # make the git part of the prompt red
+elif [[ "$(__git_ps1)" =~ "$" ]]; then   # if there is something stashed
+  __git_branch_color="\[\033[1;37m\]"    # make it bright white
+elif [[ "$(__git_ps1)" =~ "%" ]]; then   # if there are only untracked files
+  __git_branch_color="\[\033[0;35m\]"    # make it magenta
+elif [[ "$(__git_ps1)" =~ "+" ]]; then   # if there are staged files
+  __git_branch_color="\[\033[0;36m\]"    # make it cyan
+elif [[ "$(__git_ps1)" =~ ">" ]]; then   # if there are commits waiting to be pushed
+  __git_branch_color="\[\033[1;33m\]"    # make it yellow
+else
+  __git_branch_color="\[\033[00;32m\]"   # otherwise, green!
+fi
+
+  PS1="\[\033[01;33m\]\u\[\033[00m\]@\[\033[01;34m\]\h\[\033[00m\] [\[\033[01;36m\]\W\[\033[00m\]]${__git_branch_color}$(__git_ps1)\[\033[00m\] \$ "
 }
+
+# change some options for __git_ps1
+export GIT_PS1_SHOWDIRTYSTATE=true
+export GIT_PS1_SHOWSTASHSTATE=true
+export GIT_PS1_SHOWUNTRACKEDFILES=true
+export GIT_PS1_SHOWUPSTREAM="auto"
+export GIT_PS1_HIDE_IF_PWD_IGNORED=true
+export GIT_PS1_SHOWCOLORHINTS=true
 
 # set it
 if [ "$TERM" == "xterm-256color" ]; then
@@ -90,7 +109,7 @@ if [ "$TERM" == "xterm-256color" ]; then
     export PROMPT_COMMAND="set_bash_prompt; $PROMPT_COMMAND"
   fi
 else
-  PS1="${STANDARD_PROMPT}"
+  PS1="[\u@\h \W]\\$ "
 fi
 
 # path
