@@ -66,7 +66,11 @@ done
 sudo dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/ && sudo rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 
 # I'll need to do some updating here...
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak f3 screen p7zip-plugins iperf VirtualBox-6.0 xfce4-power-manager tint2 volumeicon Thunar xfce4-notifyd blueman tlp x11-ssh-askpass brave-browser
+sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak f3 screen p7zip-plugins iperf VirtualBox-6.0 xfce4-power-manager tint2 volumeicon Thunar xfce4-notifyd blueman tlp x11-ssh-askpass brave-browser flatpak
+if [ $? -ne 0 ]; then
+  echo "Error installing packages - review output above. Exiting."
+  exit 255
+fi
 
 # install Slack from flatpak
 flatpak install https://flathub.org/repo/appstream/com.slack.Slack.flatpakref
