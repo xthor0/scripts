@@ -23,7 +23,7 @@ fi
 rpm -qa | egrep -q 'rpmfusion-(free|nonfree)'
 if [ $? -eq 1 ]; then
     echo "Installing rpmfusion release pacakges..."
-    sudo su -c 'dnf install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm http://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm'
+    sudo su -c 'dnf -y install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm http://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm'
 else
     echo "rpmfusion release packages are already installed."
 fi
