@@ -41,7 +41,7 @@ fi
 if [ -f /etc/yum.repos.d/virtualbox.repo ]; then
     echo "VirtualBox repo already configured."
 else
-    fedrel=$(lsb_release -r | awk '{ print $2 }')
+    fedrel=$(awk '{ print $3 }' /etc/redhat-release)
     vbcheck=$(curl --write-out %{http_code} --silent --output /dev/null http://download.virtualbox.org/virtualbox/rpm/fedora/${fedrel})
     curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo | sudo tee /etc/yum.repos.d/virtualbox.repo
     if [ ${vbcheck} -eq 404 ]; then
