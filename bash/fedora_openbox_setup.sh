@@ -1,5 +1,19 @@
 #!/bin/bash
 
+###########
+# TO-DO LIST
+###########
+
+######
+# 1. weather
+#    tint2rc is using `weather -i` which doesn't work.
+#    figure out how to use something with conky. a few things I've played with:
+#    curl -s wttr.in/84118 | sed -n '3,7{s/\d27\[[0-9;]*m//g;s/^..//;s/ *$//;p}'
+#    inxi -w --weather-unit i
+
+# 2. ask questions before installing the packages below (see comment about asking questions :)
+# 3. turn this into something like the crunchbang script that gets run when the user logs in for the first time
+
 # make sure we're running this as a non-root user...
 if [ "$(whoami)" == "root" ]; then
     echo "You should not run this script as root - instead, it will invoke commands"
@@ -54,7 +68,7 @@ fi
 # enable coprs
 for repo in dawid/better_fonts; do
     sudo dnf copr list | grep -q ${repo}
-    if [ $? -eq 1 ]; then 
+    if [ $? -eq 1 ]; then
         echo "Installing copr repo ${repo}..."
         sudo dnf -y copr enable ${repo}
     else
@@ -65,15 +79,45 @@ done
 # brave browser
 sudo dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/ && sudo rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 
-# I'll need to do some updating here...
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop elfutils-libelf-devel fuse-exfat htop remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak f3 screen p7zip-plugins iperf VirtualBox-6.0 xfce4-power-manager tint2 volumeicon Thunar xfce4-notifyd blueman tlp x11-ssh-askpass brave-browser flatpak
+# base packages
+sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop fuse-exfat htop remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak f3 screen p7zip-plugins iperf VirtualBox-6.0 xfce4-power-manager tint2 volumeicon Thunar xfce4-notifyd blueman tlp x11-ssh-askpass brave-browser nitrogen heisenbug-backgrounds-base
 if [ $? -ne 0 ]; then
   echo "Error installing packages - review output above. Exiting."
   exit 255
 fi
 
+# if we're a VirtualBox guest, install these apps
+lspci | grep -q 'InnoTek Systemberatung GmbH VirtualBox Guest Service'
+if [ $? -eq 0 ]; then
+  # the Fedora supplied virtualbox guest additions work great - except, shared folders do not work
+  sudo dnf -y install akmod-VirtualBox
+  retval=$?
+
+  # also, let's kill xscreensaver, as there's really no reason to keep it running on a VM
+  sudo dnf -y remove xscreensaver-base
+else
+  # if we're bare metal, install VirtualBox hypervisor
+  sudo dnf -y install elfutils-libelf-devel VirtualBox-6.0
+  retval=$?
+fi
+if [ ${retval} -ne 0 ]; then
+  echo "Error installing packages - review output above. Exiting."
+  exit 255
+fi
+
+### WE SHOULD ASK before installing the stuff below
+sudo dnf -y install podman-docker
+if [ $? -eq 0 ]; then
+  sudo touch /etc/containers/nodocker # this will prevent docker commands from telling you about podman-docker
+else
+  echo "Error installing podman-docker."
+  read -n1 -s -r -p "Press any key to continue."
+fi
+
 # install Slack from flatpak
-flatpak install https://flathub.org/repo/appstream/com.slack.Slack.flatpakref
+#flatpak install -y --user https://flathub.org/repo/appstream/com.slack.Slack.flatpakref
+# maybe I'll try this next time...
+flatpak install -y flathub com.slack.Slack
 
 # upgrade everything
 sudo dnf -y upgrade
@@ -89,7 +133,7 @@ if [ $? -ne 0 ]; then
   echo "Can't cd to ${HOME}/tmp -- exiting."
   exit 255
 fi
-  
+
 # we need to copy in a shload of dotfiles... mostly for Openbox and Terminator, but... yeah.
 # I need something sexier than curl | tar but... it's 12 AM :)
 wget https://xw-killer-dotfiles.s3-us-west-1.amazonaws.com/killer_dotfiles.tgz && tar zxvf killer_dotfiles.tgz -C ${HOME}
