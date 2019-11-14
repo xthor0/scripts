@@ -81,20 +81,26 @@ sudo dnf -y upgrade
 # create directories
 mkdir ${HOME}/.fonts ${HOME}/tmp >& /dev/null
 pushd ${HOME}/tmp
-
+if [ $? -ne 0 ]; then
+  echo "Can't cd to ${HOME}/tmp -- exiting."
+  exit 255
+fi
+  
 # we need to copy in a shload of dotfiles... mostly for Openbox and Terminator, but... yeah.
 # I need something sexier than curl | tar but... it's 12 AM :)
 wget https://xw-killer-dotfiles.s3-us-west-1.amazonaws.com/killer_dotfiles.tgz && tar zxvf killer_dotfiles.tgz -C ${HOME}
+if [ $? -ne 0 ]; then
+  echo "Unable to download dotfiles tarball -- exiting."
+  exit 255
+fi
 
 # also - Terminus TTF. Download the zip and stuff the ttf files in ~/.fonts - otherwise, terminator
 # will be ugly and unhappy
+wget https://files.ax86.net/terminus-ttf/files/latest.zip
 if [ $? -eq 0 ]; then
-  wget https://files.ax86.net/terminus-ttf/files/latest.zip
-  if [ $? -eq 0 ]; then
-    unzip latest.zip && mv terminus-ttf-*/*.ttf ${HOME}/.fonts && fc-cache -f -v
-  fi
+  unzip latest.zip && mv terminus-ttf-*/*.ttf ${HOME}/.fonts && fc-cache -f -v
 else
-  echo "Can't cd to ${HOME}/tmp -- exiting."
+  echo "Unable to download Terminus TTF font and install. Exiting."
   exit 255
 fi
 
@@ -106,6 +112,24 @@ sudo usermod -aG vboxusers $(whoami)
 ############
 # system config
 ############
+
+# if this is virtualbox - a reminder to the user that guest additions that are preinstalled
+# won't work with the display unless the adapter type is changed
+# VMware SVGA II Adapter
+lspci | grep -q VirtualBox
+if [ $? -eq 0 ]; then
+  lspci | grep -q 'VMware SVGA II Adapter'
+  if [ $? -eq 0 ]; then
+    echo "Please change your VirtualBox system properties!"
+    echo
+    echo "Currently, your display adapter is set to the VMSVGA display adapter."
+    echo "If you change it to VBoxVGA, the guest additions installed by default"
+    echo "in Fedora will allow the display to be dynamically adjusted."
+    echo
+    echo "Press enter to continue..."
+    read continue
+  fi
+fi
 
 # if we're running an Intel video chipset, we need to tweak a file so that tearing is reduced drastically
 lspci | grep -qi VGA.*intel
