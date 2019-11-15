@@ -13,6 +13,7 @@
 
 # 2. ask questions before installing the packages below (see comment about asking questions :)
 # 3. turn this into something like the crunchbang script that gets run when the user logs in for the first time
+# 4. change spinner theme to something... not spinner.
 
 # make sure we're running this as a non-root user...
 if [ "$(whoami)" == "root" ]; then
@@ -94,7 +95,7 @@ if [ $? -eq 0 ]; then
   # let's kill xscreensaver, as there's really no reason to keep it running on a VM, we already have OS lock screens
   echo "Removing xscreensaver..."
   sudo dnf -y remove xscreensaver-base
-  
+
   # the Fedora supplied virtualbox guest additions work great - except, shared folders do not work
   echo "Installing akmod-VirtualBox..."
   sudo dnf -y install akmod-VirtualBox
@@ -123,12 +124,17 @@ fi
 sudo systemctl enable tlp
 
 # install Slack from flatpak
-#flatpak install -y --user https://flathub.org/repo/appstream/com.slack.Slack.flatpakref
-# maybe I'll try this next time...
-flatpak install -y flathub com.slack.Slack
+sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo && flatpak install -y flathub com.slack.Slack
+if [ $? -ne 0 ]; then
+  read -n1 -s -r -p "Flatpak configuration failed, consult the error message above and press a key to continue."
+fi
 
 # upgrade everything
 sudo dnf -y upgrade
+if [ $? -ne 0 ]; then
+  echo "Error updating the system. Take a look at the error before proceeding."
+  read -n1 -s -r -p "Press any key to continue."
+fi
 
 ############
 # app config
