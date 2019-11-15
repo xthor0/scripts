@@ -163,6 +163,7 @@ fi
 popd
 
 # virtualbox needs you to be a member of vboxusers if you have a prayer of using USB
+echo "Adding $(whoami) to vboxusers group..."
 sudo usermod -aG vboxusers $(whoami)
 
 ############
