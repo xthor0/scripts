@@ -80,7 +80,7 @@ done
 sudo dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/ && sudo rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 
 # base packages
-sudo dnf -y install vim-enhanced nmap vim-X11 lynx axel freerdp terminator expect ncdu pwgen vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop fuse-exfat htop remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak f3 screen p7zip-plugins iperf tint2 Thunar xfce4-notifyd tlp x11-ssh-askpass brave-browser heisenbug-backgrounds-base openbox obconf compton volumeicon nitrogen obmenu conky xscreensaver lxqt-openssh-askpass xfce4-power-manager blueman arandr gmrun leafpad lxappearance network-manager-applet xbacklight flameshot playerctl mate-calc
+sudo dnf -y install vim-enhanced nmap vim-X11 lynx axel freerdp terminator expect ncdu pwgen vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop fuse-exfat htop remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak f3 screen p7zip-plugins iperf tint2 Thunar xfce4-notifyd tlp x11-ssh-askpass brave-browser heisenbug-backgrounds-base openbox obconf compton volumeicon nitrogen conky xscreensaver lxqt-openssh-askpass xfce4-power-manager blueman arandr leafpad lxappearance network-manager-applet xbacklight flameshot playerctl mate-calc
 if [ $? -ne 0 ]; then
   echo "Error installing packages - review output above. Exiting."
   exit 255
