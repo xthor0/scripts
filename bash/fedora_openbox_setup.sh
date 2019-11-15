@@ -80,7 +80,7 @@ done
 sudo dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/ && sudo rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 
 # base packages
-sudo dnf -y install vim-enhanced nmap vim-X11 conky lynx axel freerdp terminator expect ncdu pwgen vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop fuse-exfat htop remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak f3 screen p7zip-plugins iperf VirtualBox-6.0 xfce4-power-manager tint2 volumeicon Thunar xfce4-notifyd blueman tlp x11-ssh-askpass brave-browser nitrogen heisenbug-backgrounds-base
+sudo dnf -y install vim-enhanced nmap vim-X11 lynx axel freerdp terminator expect ncdu pwgen vlc kernel-devel fontconfig-enhanced-defaults fontconfig-font-replacements telegram-desktop fuse-exfat htop remmina-plugins-rdp arc-theme htop exfat-utils git code putty gimp hexedit flatpak f3 screen p7zip-plugins iperf tint2 Thunar xfce4-notifyd tlp x11-ssh-askpass brave-browser heisenbug-backgrounds-base openbox obconf compton volumeicon nitrogen obmenu conky xscreensaver lxqt-openssh-askpass xfce4-power-manager blueman arandr gmrun leafpad lxappearance network-manager-applet xbacklight flameshot playerctl mate-calc
 if [ $? -ne 0 ]; then
   echo "Error installing packages - review output above. Exiting."
   exit 255
@@ -89,14 +89,19 @@ fi
 # if we're a VirtualBox guest, install these apps
 lspci | grep -q 'InnoTek Systemberatung GmbH VirtualBox Guest Service'
 if [ $? -eq 0 ]; then
+  echo "Running as a VM, adjusting configuration..."
+
+  # let's kill xscreensaver, as there's really no reason to keep it running on a VM, we already have OS lock screens
+  echo "Removing xscreensaver..."
+  sudo dnf -y remove xscreensaver-base
+  
   # the Fedora supplied virtualbox guest additions work great - except, shared folders do not work
+  echo "Installing akmod-VirtualBox..."
   sudo dnf -y install akmod-VirtualBox
   retval=$?
-
-  # also, let's kill xscreensaver, as there's really no reason to keep it running on a VM
-  sudo dnf -y remove xscreensaver-base
 else
   # if we're bare metal, install VirtualBox hypervisor
+  echo "Installing VirtualBox-6.0..."
   sudo dnf -y install elfutils-libelf-devel VirtualBox-6.0
   retval=$?
 fi
@@ -113,6 +118,9 @@ else
   echo "Error installing podman-docker."
   read -n1 -s -r -p "Press any key to continue."
 fi
+
+# enable tlp
+sudo systemctl enable tlp
 
 # install Slack from flatpak
 #flatpak install -y --user https://flathub.org/repo/appstream/com.slack.Slack.flatpakref
