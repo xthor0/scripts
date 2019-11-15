@@ -215,7 +215,8 @@ sudo systemctl disable firewalld
 sudo systemctl stop firewalld
 
 # make openbox default for LXDM
-sudo sed -i 's/^# session=/usr/bin/startlxde/session=/bin/openbox/g' /etc/lxdm/lxdm.conf
+#sudo sed -i 's/^# session=\/usr\/bin\/startlxde/session=\/bin\/openbox/g' /etc/lxdm/lxdm.conf
+echo -e "[Desktop]\nsession=/usr/share/xsessions/openbox.desktop" > ${HOME}/.dmrc
 
 ############
 # END
