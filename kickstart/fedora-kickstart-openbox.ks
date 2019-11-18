@@ -116,6 +116,9 @@ mupdf
 virtualbox-guest-additions
 genisoimage
 awscli
+gcc
+make
+perl
 %end
 
 # Post-installation Script
