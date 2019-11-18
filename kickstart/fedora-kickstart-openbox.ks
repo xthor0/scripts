@@ -115,6 +115,7 @@ libreoffice
 mupdf
 virtualbox-guest-additions
 genisoimage
+awscli
 %end
 
 # Post-installation Script
