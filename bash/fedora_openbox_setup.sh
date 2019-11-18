@@ -13,7 +13,13 @@
 
 # 2. ask questions before installing the packages below (see comment about asking questions :)
 # 3. turn this into something like the crunchbang script that gets run when the user logs in for the first time
-# 4. change spinner theme to something... not spinner.
+# 4. change plymouth theme to something... not spinner.
+
+### BREAKAGES
+# script exits after flatpak runs. No idea why.
+
+# midori sucks, so I installed chromium (until this script installed brave). Removing nss-mdns also removes chromium.
+# since I don't work anyplace using .local domain names anymore (and I'm really not likely to), maybe I should just leave nss-mdns alone.
 
 # make sure we're running this as a non-root user...
 if [ "$(whoami)" == "root" ]; then
