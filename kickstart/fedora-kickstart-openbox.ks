@@ -167,12 +167,20 @@ echo
 echo "I'm ready when you are, but make sure you can give this your full attention."
 echo "sudo times out - and you may have to re-enter your password a few times."
 read -n1 -s -r -p "Press any key to continue. "
+echo
 
-echo "Installing Slack from flathub..."
 
 # install Slack from flatpak
-sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo && flatpak install -y flathub com.slack.Slack
-if [ \$? -ne 0 ]; then
+echo "Configuring Flatpak..."
+sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo && flatpak install -y flathub
+if [ \$? -eq 0 ]; then
+  echo "Installing Slack from flathub..."
+  flatpak install -y com.slack.Slack
+  if [ \$? -eq 0 ]; then
+    echo "Installing Spotify from flathub..."
+    sudo flatpak install -y com.spotify.Client
+  fi
+else
   read -n1 -s -r -p "Flatpak configuration failed, consult the error message above and press a key to continue."
 fi
 
