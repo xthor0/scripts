@@ -1,13 +1,3 @@
-############
-# TODO
-############
-
-# LXDM - there has to be a way in the post section to set openbox to be the default session
-# post section problems - brave-browser isn't installing, and the virtualbox modules don't seem to be installing either
-# also none of the dotfiles and fonts are installing...
-
-# Remaster the server ISO so that it loads the kickstart file right from disk...
-
 # Configure installation method
 install
 url --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-31&arch=x86_64"
@@ -16,27 +6,13 @@ repo --name=rpmfusion-free --mirrorlist="https://mirrors.rpmfusion.org/mirrorlis
 repo --name=rpmfusion-free-updates --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-updates-released-31&arch=x86_64" --cost=0
 repo --name=rpmfusion-nonfree --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=nonfree-fedora-31&arch=x86_64" --includepkgs=rpmfusion-nonfree-release
 repo --name=rpmfusion-nonfree-updates --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=nonfree-fedora-updates-released-31&arch=x86_64" --cost=0
-
-# zerombr
-zerombr
-
-# Configure Boot Loader
-bootloader --location=mbr --driveorder=sda
-
-# Create Physical Partition
-# this will need adjustments when I use it on a physical machine
-part /boot --size=512 --asprimary --ondrive=sda --fstype=xfs
-part swap --size=2048 --ondrive=sda
-part / --size=8192 --grow --asprimary --ondrive=sda --fstype=xfs
-
-# Remove all existing partitions
-clearpart --all --drives=sda
+repo --name=better-fonts-copr --baseurl=https://copr-be.cloud.fedoraproject.org/results/dawid/better_fonts/fedora-31-x86_64/
 
 # Configure Firewall
-firewall --enabled --ssh
+firewall --disabled
 
 # Configure Network Interfaces
-network --onboot=yes --bootproto=dhcp --hostname=fedcrunch-test
+# network --onboot=yes --bootproto=dhcp --hostname=fedcrunch
 
 # Configure Keyboard Layouts
 keyboard us
@@ -48,16 +24,17 @@ lang en_US
 xconfig --startxonboot
 
 # Configure Time Zone
-timezone US/Denver
+timezone America/Denver
 
 # lock root user
 rootpw --lock
 
-# Create User Account
-user --groups=wheel --name=xthor --password=$6$HWYbWvgmz8oOzpsm$F5uqEwOaA2QUgtpsgvnQoIOJCrL7gz42RkghGZivxAR37FCQfaFvRfuGDW5cj3R2KQgpNAdqD7GyD0J5dLoob0 --iscrypted --gecos="Ben Brown"
+# user accounts cannot be created during installation and MUST be created using firstboot
+# otherwise - .skel files don't work!
+firstboot --enable
 
-# Perform Installation in Text Mode
-text
+# launch graphical install - makes network selection and disk partitioning easier
+graphical
 
 # Package Selection
 %packages
@@ -110,10 +87,9 @@ compton
 volumeicon
 nitrogen
 conky
-xscreensaver
 lxqt-openssh-askpass
 xfce4-power-manager
-blueman
+blueberry
 arandr
 leafpad
 lxappearance
@@ -127,87 +103,168 @@ podman-docker
 tlp
 lxdm
 lxterminal
+xautolock
+i3lock
+initial-setup-gui
+fontconfig-enhanced-defaults
+fontconfig-font-replacements
+NetworkManager-openvpn-gnome
+gvfs-smb
+sox
+libreoffice
+mupdf
+virtualbox-guest-additions
 %end
 
 # Post-installation Script
+#%post --erroronfail
+#exec < /dev/tty3 > /dev/tty3
+#chvt 3
 %post
+
 # install rpmfusion release packages
 dnf -y install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-31.noarch.rpm http://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-31.noarch.rpm
 
-# better fonts!
+# make sure better_fonts copr is enabled 
 dnf -y copr enable dawid/better_fonts
-dnf -y install fontconfig-enhanced-defaults fontconfig-font-replacements
 
-# install vscode
+# install vscode repo
 rpm --import https://packages.microsoft.com/keys/microsoft.asc
 echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo
-dnf -y install code
 
 # configure VirtualBox repo
-curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo | tee /etc/yum.repos.d/virtualbox.repo
+curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo > /etc/yum.repos.d/virtualbox.repo
 
 # brave browser
 dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/
 rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
-dnf -y install brave-browser
 
-# configure VirtualBox packages
-# if we're a VirtualBox guest, install these apps
-lspci | grep -q 'InnoTek Systemberatung GmbH VirtualBox Guest Service'
+# kill firewalld
+#echo "Disabling firewalld..."
+#systemctl disable firewalld
+
+# set up LXDM
+sed -i 's/^# session=\/usr\/bin\/startlxde/session=\/bin\/openbox-session/g' /etc/lxdm/lxdm.conf
+
+echo "Setting up .skel files..."
+# set up skel files to run 
+mkdir -p /etc/skel/.config/openbox 
+
+cat << EOF > /etc/skel/.config/openbox/autostart
+# this should be deleted by .fedcrunch-setup 
+lxterminal -e \${HOME}/.fedcrunch-setup 
+EOF
+chmod 700 /etc/skel/.config/openbox/autostart
+
+cat << EOF > /etc/skel/.fedcrunch-setup
+#!/bin/bash
+
+## TODO: Make this more interactive!
+
+echo "Welcome to the FedCruch setup script!"
+echo
+echo "I'm ready when you are, but make sure you can give this your full attention."
+echo "sudo times out - and you may have to re-enter your password a few times."
+read -n1 -s -r -p "Press any key to continue. "
+
+echo "Installing Slack from flathub..."
+
+# install Slack from flatpak
+sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo && flatpak install -y flathub com.slack.Slack
+if [ \$? -ne 0 ]; then
+  read -n1 -s -r -p "Flatpak configuration failed, consult the error message above and press a key to continue."
+fi
+
+# install brave and vscode
+echo "Installing Brave browser, and vscode..."
+sudo dnf -y install brave-browser code
+
+echo "Upgrading all packages with dnf..."
+
+# upgrade all packages
+sudo dnf -y upgrade
+if [ \$? -ne 0 ]; then
+  echo "Error updating the system. Take a look at the error before proceeding."
+  read -n1 -s -r -p "Press any key to continue. "
+fi
+
+echo "Installing fonts and preferred dotfiles..."
+
+# create directories
+mkdir \${HOME}/tmp >& /dev/null
+pushd \${HOME}/tmp
+if [ \$? -ne 0 ]; then
+  echo "Can't cd to \${HOME}/tmp"
+  read -n1 -s -r -p "Press any key to exit."
+  exit 255
+fi
+
+# grab everything from Ben's github dotfiles repo and install the files
+echo "Installing dotfiles from https://github.com/xthor0/dotfiles.git -- please wait!"
+curl -LO https://api.github.com/repos/xthor0/dotfiles/tarball
 if [ \$? -eq 0 ]; then
+  tar xf tarball && cd xthor0-dotfiles* && rsync -a . \${HOME}
+  if [ \$? -ne 0 ]; then
+    echo "Error installing dotfiles."
+    read -n1 -s -r -p "Press any key to continue. "
+  fi
+else
+  echo "Error downloading from api.github.com."
+  read -n1 -s -r -p "Press any key to continue. "
+fi
+popd
+
+# get chassis type
+chassistype=$(hostnamectl status | grep Chassis | awk '{ print $2 }')
+
+# set up SSH if we're a desktop, TLP if we're a laptop 
+if [ "$chassistype" == "laptop" ]; then
+  echo "Enabling tlp at boot..."
+  sudo systemctl enable tlp
+else
+  echo "Enabling sshd..."
+  sudo systemctl enable sshd && sudo systemctl start sshd
+fi
+
+# if we're a VirtualBox guest, install these apps
+if [ "\${chassistype}" == "vm" ]; then
   echo "Running as a VM, adjusting configuration..."
 
-  # let's kill xscreensaver, as there's really no reason to keep it running on a VM, we already have OS lock screens
-  echo "Removing xscreensaver..."
-  sudo dnf -y remove xscreensaver-base
+  # no need to automatically lock the screen on a VM, we already have OS lock screens
+  echo "Removing xautolock..."
+  sed -i 's/^exec xautolock/\#exec xautolock/g' \${HOME}/.config/openbox/autostart
 
-  # the Fedora supplied virtualbox guest additions work great - except, shared folders do not work
-  echo "Installing akmod-VirtualBox..."
-  sudo dnf -y install akmod-VirtualBox
+  # virtualbox needs you to be a member of vboxsf if you want to use shared folders from the host
+  echo "Adding \$(whoami) to vboxsf group..."
+  sudo usermod -aG vboxsf \$(whoami)
   retval=\$?
 else
   # if we're bare metal, install VirtualBox hypervisor
   echo "Installing VirtualBox-6.0..."
+  curl https://raw.githubusercontent.com/gryf/vboxmanage-bash-completion/master/VBoxManage | tee -a \${HOME}/.bash_completion >& /dev/null
   sudo dnf -y install VirtualBox-6.0
   retval=\$?
+  
+  # virtualbox needs you to be a member of vboxusers if you have a prayer of using USB
+  echo "Adding \$(whoami) to vboxusers group..."
+  sudo usermod -aG vboxusers \$(whoami)
 fi
+
+# did it all go off without a hitch?
 if [ \${retval} -ne 0 ]; then
   echo "Error installing packages - review output above. Exiting."
   exit 255
 fi
 
-# if we're running an Intel video chipset, we need to tweak a file so that tearing is reduced drastically
-cat << EOF | tee /etc/X11/xorg.conf.d/20-intel.conf
-Section "Device"
-Identifier "Intel Graphics"
-Driver "intel"
-Option "AccelMethod" "sna"
-Option "TearFree" "true"
-EndSection
+read -n1 -s -r -p "Press any key to reboot!"
+sudo reboot
 EOF
-fi
+chmod 700 /etc/skel/.fedcrunch-setup
 
-# kill firewalld
-sudo systemctl disable firewalld
-
-# create dirs to hold fonts and temp files
-mkdir /home/xthor/.fonts /home/xthor/tmp >& /dev/null
-cd /home/xthor/tmp
-
-# we need to copy in a shload of dotfiles... mostly for Openbox and Terminator, but... yeah.
-# I need something sexier than curl | tar but... it's 12 AM :)
-wget https://xw-killer-dotfiles.s3-us-west-1.amazonaws.com/killer_dotfiles.tgz && tar zxvf killer_dotfiles.tgz -C /home/xthor
-
-# also - Terminus TTF. Download the zip and stuff the ttf files in ~/.fonts - otherwise, terminator
-# will be ugly and unhappy
-wget https://files.ax86.net/terminus-ttf/files/latest.zip
-unzip latest.zip && mv terminus-ttf-*/*.ttf /home/xthor/.fonts
-
-# cleanup
-rm -rf terminus-ttf-* killer_dotfiles.tgz
+chvt 1
 
 # FIN
 %end
 
 # Reboot After Installation
-reboot --eject
+reboot
