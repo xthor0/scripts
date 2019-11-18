@@ -114,6 +114,7 @@ sox
 libreoffice
 mupdf
 virtualbox-guest-additions
+genisoimage
 %end
 
 # Post-installation Script
