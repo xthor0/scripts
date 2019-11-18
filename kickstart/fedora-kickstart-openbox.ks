@@ -201,12 +201,12 @@ echo "Installing dotfiles from https://github.com/xthor0/dotfiles.git -- please 
 curl -LO https://api.github.com/repos/xthor0/dotfiles/tarball
 if [ \$? -eq 0 ]; then
   tar xf tarball && cd xthor0-dotfiles* && rsync -a . \${HOME}
-  if [ \$? -ne 0 ]; then
-    echo "Error installing dotfiles."
-    read -n1 -s -r -p "Press any key to continue. "
-  else
+  if [ \$? -eq 0 ]; then
     # clean up
     rm -rf tarball xthor0-dotfiles*
+  else
+    echo "Error installing dotfiles."
+    read -n1 -s -r -p "Press any key to continue. "
   fi
 else
   echo "Error downloading from api.github.com."
