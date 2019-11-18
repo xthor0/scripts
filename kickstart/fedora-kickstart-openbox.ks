@@ -139,10 +139,6 @@ curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo > /etc
 dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/
 rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 
-# kill firewalld
-#echo "Disabling firewalld..."
-#systemctl disable firewalld
-
 # set up LXDM
 sed -i 's/^# session=\/usr\/bin\/startlxde/session=\/bin\/openbox-session/g' /etc/lxdm/lxdm.conf
 
@@ -207,6 +203,9 @@ if [ \$? -eq 0 ]; then
   if [ \$? -ne 0 ]; then
     echo "Error installing dotfiles."
     read -n1 -s -r -p "Press any key to continue. "
+  else
+    # clean up
+    rm -rf tarball xthor0-dotfiles*
   fi
 else
   echo "Error downloading from api.github.com."
