@@ -181,7 +181,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # generate image for cidata
-dd if=/dev/zero of=${VBOX_DIR}/${vmname}/cloudinit.img count=1 bs=1M && mkfs.vat -n cidata ${VBOX_DIR}/${vmname}/cloudinit.img 
+dd if=/dev/zero of=${VBOX_DIR}/${vmname}/cloudinit.img count=1 bs=1M && mkfs.vfat -n cidata ${VBOX_DIR}/${vmname}/cloudinit.img 
 if [ $? -eq 0 ]; then
   metadata-file=$(mktemp)
   cat << EOF > ${metadata-file}
