@@ -199,7 +199,8 @@ users:
 timezone: America/Denver
 runcmd:
     - touch /etc/cloud/cloud-init.disabled
-    - eject cdrom
+    - yum -y upgrade
+    - reboot
 EOF
 else
   echo "error creating cloudinit.img -- exiting."
@@ -233,18 +234,25 @@ EOF
 fi
 
 # write the config files to the vfat image
-mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img ${TEMP_D}/meta-data :: && mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img ${TEMP_D}/user-data ::
+mcopy -i /tmp/cloudinit.img ${TEMP_D}/meta-data :: && mcopy -i /tmp/cloudinit.img ${TEMP_D}/user-data ::
 if [ $? -ne 0 ]; then
   echo "Error writing user-data or meta-data to cloudinit.img."
   exit 255
 fi
 
 if [ -n "${ipaddr}" ]; then
-  mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img ${TEMP_D}/network-config ::
+  mcopy -i /tmp/cloudinit.img ${TEMP_D}/network-config ::
   if [ $? -ne 0 ]; then
     echo "Error writing network-config to cloudinit.img."
     exit 255
   fi
+fi
+
+# convert cloudinit.img to something that vbox can handle
+qemu-img convert -f raw -O vdi /tmp/cloudinit.img ${VBOX_DIR}/${vmname}/cloudinit.img
+if [ $? -ne 0 ]; then
+  echo "Error running qemu-img convert. Exiting."
+  exit 255
 fi
 
 # attach the cloudinit.img to the VM
@@ -258,7 +266,7 @@ fi
 ${vbm} startvm ${vmname} --type headless
 
 # clean up files
-# commented till we're sure this is working
+rm -rf ${TEMP_D} /tmp/cloudinit.img
 
 # and... we're done
 echo "Done!"
