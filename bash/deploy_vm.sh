@@ -30,14 +30,14 @@ function is_int() {
 
 # todo: build in static IP functionality
 # get command-line args
-while getopts "n:if:s:c:r:" OPTION; do
+while getopts "n:i:f:s:c:r:" OPTION; do
     case $OPTION in
         n) vmname="$OPTARG";;
-        i) staticip="yes";;
         f) flavor="$OPTARG";;
         s) storage="$OPTARG";;
         c) cpu="$OPTARG";;
         r) ram="$OPTARG";;
+        i) ipaddr="$OPTARG";;
         *) usage;;
     esac
 done
@@ -45,12 +45,6 @@ done
 # verify command-line args
 if [ -z "${vmname}" -o -z "${flavor}" ]; then
     usage
-fi
-
-# I'll code the static IP stuff later...
-if [ -n "${staticip}" ]; then
-    echo "-i is a broken option, sorry."
-    exit 255
 fi
 
 # if storage is not specified, default to 8GB
@@ -186,16 +180,36 @@ if [ $? -ne 0 ]; then
     exit 255
 fi
 
-# set CLOUDINIT_HOST if we didn't get it from .deploy_vm
-if [ -z "${CLOUDINIT_HOST}" ]; then
-    CLOUDINIT_HOST=10.187.88.1
+# generate image for cidata
+dd if=/dev/zero of=${VBOX_DIR}/${vmname}/cloudinit.img count=1 bs=1M && mkfs.vat -n cidata ${VBOX_DIR}/${vmname}/cloudinit.img 
+if [ $? -eq 0 ]; then
+  metadata-file=$(mktemp)
+  cat << EOF > ${metadata-file}
+instance-id: 1
+local-hostname: ${vmname}
+EOF
+  userdata-file=$(mktemp)
+  cat << EOF > ${userdata-file}
+#cloud-config
+users:
+    - name: root
+      passwd: toor
+      ssh_authorized_keys:
+        - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSUppn5b2njEQSw8FHqyZ0OZiPD14wEejulwnQ7gxLdQYJEqXMleHx4u/9ff3/jDXoGaBFiT2LmUTnpMV8HSj4jsB4PCoFAbq4XnlnwyBx7va/8LQOMdKsjF5W6peO+DYKh+ow9YaJvctzGPebkkNvhI0YFhZod58uoO7lyTnQXkMm8DXl6q7WhNfsZZiwr7tXicUZojU0msMiDpX1JvhGow+mKym0U/6cMgozypYfNbQ2PVkfNnadslp29O5Mfd5X4U+cbACa1sUYYqOT2Zz8C4t5QFXRY1LNokmRbcqbO01bygbE4S2TDnvRz+XZmfZTuw9MMgp7JPfo6cOfDYKf xthor
+timezone: America/Denver
+runcmd:
+    - touch /etc/cloud/cloud-init.disabled
+    - eject cdrom
+EOF
+else
+  echo "error creating cloudinit.img -- exiting."
+  exit 255
 fi
 
-function keeping_this_because_Ill_use_it() {
-## this works! I could use it to config static IPs, if I need to.
 if [ -n "${ipaddr}" ]; then
-    cat << EOF | tee ${ISOTMP}/network-config
-
+  gateway=$(ip route | grep ^default | awk '{ print $3 }')
+  networkconfig-file=$(mktemp)
+  cat << EOF > ${networkconfig-file}
 ## /network-config on NoCloud cidata disk
 ## version 1 format
 ## version 2 is completely different, see the docs
@@ -212,27 +226,40 @@ config:
     routes:
     - network: 0.0.0.0
       netmask: 0.0.0.0
-      gateway: 10.187.88.1
+      gateway: ${gateway}
 - type: nameserver
-  address: [10.187.88.1]
-  search: [.lab]
+  address: [${gateway}]
+  search: [$(grep ^search /etc/resolv.conf  | awk '{ print $2 }')]
 EOF
-    if [ $? -ne 0 ]; then
-        echo "Error creating ${ISOTMP}/network-config - exiting."
-        exit 255
-    fi
 fi
-}
 
-# set smbios data so cloudinit functions over the network
-${vbm} setextradata ${vmname} "VBoxInternal/Devices/pcbios/0/Config/DmiSystemSerial" "ds=nocloud-net;s=http://${CLOUDINIT_HOST}/cloudinit.php?vmname=${vmname}&/"
-if [ $? -ne 0 ]; then
-    echo "Error running setextradata command. Exiting."
-    exit 255
+# write the config files to the vfat image
+cat ${metadata-file} | mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img - ::meta-data && cat ${userdata-file} | mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img - ::user-data
+if [ $? -eq 0 ]; then
+  echo "rm ${metadata-file} ${userdata-file}"
+else
+  echo "Error writing user-data or meta-data to cloudinit.img."
+  exit 255
 fi
+
+if [ -n "${ipaddr}" ]; then
+  cat ${networkconfig-file} | mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img - ::network-config
+  if [ $? -eq 0 ]; then
+    echo "rm ${networkconfig-file}"
+  else
+    echo "Error writing ${networkconfig-file} (network-config) to cloudinit.img."
+    exit 255
+  fi
+fi
+
+# attach the cloudinit.img to the VM
+${vbm} storageattach ${vmname} --storagectl sata_c1 --port 0 --device 1 --type hdd --medium ${VBOX_DIR}/${vmname}/cloudinit.img
 
 # boot up the VM
 ${vbm} startvm ${vmname} --type headless
+
+# clean up files
+# commented till we're sure this is working
 
 # and... we're done
 echo "Done!"
