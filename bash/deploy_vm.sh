@@ -201,8 +201,6 @@ users:
 timezone: America/Denver
 runcmd:
     - touch /etc/cloud/cloud-init.disabled
-    - yum -y upgrade
-    - reboot
 EOF
 else
   echo "error creating cloudinit.img -- exiting."
