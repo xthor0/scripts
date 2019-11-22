@@ -180,16 +180,16 @@ if [ $? -ne 0 ]; then
     exit 255
 fi
 
+TEMP_D=$(mktemp -d)
+
 # generate image for cidata
 dd if=/dev/zero of=${VBOX_DIR}/${vmname}/cloudinit.img count=1 bs=1M && mkfs.vfat -n cidata ${VBOX_DIR}/${vmname}/cloudinit.img 
 if [ $? -eq 0 ]; then
-  metadata-file=$(mktemp)
-  cat << EOF > ${metadata-file}
+  cat << EOF > ${TEMP_D}/meta-data
 instance-id: 1
 local-hostname: ${vmname}
 EOF
-  userdata-file=$(mktemp)
-  cat << EOF > ${userdata-file}
+  cat << EOF > ${TEMP_D}/user-data
 #cloud-config
 users:
     - name: root
@@ -208,8 +208,7 @@ fi
 
 if [ -n "${ipaddr}" ]; then
   gateway=$(ip route | grep ^default | awk '{ print $3 }')
-  networkconfig-file=$(mktemp)
-  cat << EOF > ${networkconfig-file}
+  cat << EOF > ${TEMP_D}/network-config
 ## /network-config on NoCloud cidata disk
 ## version 1 format
 ## version 2 is completely different, see the docs
@@ -234,26 +233,26 @@ EOF
 fi
 
 # write the config files to the vfat image
-cat ${metadata-file} | mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img - ::meta-data && cat ${userdata-file} | mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img - ::user-data
-if [ $? -eq 0 ]; then
-  echo "rm ${metadata-file} ${userdata-file}"
-else
+mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img ${TEMP_D}/meta-data :: && mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img ${TEMP_D}/user-data ::
+if [ $? -ne 0 ]; then
   echo "Error writing user-data or meta-data to cloudinit.img."
   exit 255
 fi
 
 if [ -n "${ipaddr}" ]; then
-  cat ${networkconfig-file} | mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img - ::network-config
-  if [ $? -eq 0 ]; then
-    echo "rm ${networkconfig-file}"
-  else
-    echo "Error writing ${networkconfig-file} (network-config) to cloudinit.img."
+  mcopy -i ${VBOX_DIR}/${vmname}/cloudinit.img ${TEMP_D}/network-config ::
+  if [ $? -ne 0 ]; then
+    echo "Error writing network-config to cloudinit.img."
     exit 255
   fi
 fi
 
 # attach the cloudinit.img to the VM
-${vbm} storageattach ${vmname} --storagectl sata_c1 --port 0 --device 1 --type hdd --medium ${VBOX_DIR}/${vmname}/cloudinit.img
+${vbm} storageattach ${vmname} --storagectl sata_c1 --port 1 --device 0 --type hdd --medium ${VBOX_DIR}/${vmname}/cloudinit.img
+if [ $? -ne 0 ]; then
+  echo "Error attaching cloudinit.img to ${vmname}. Exiting."
+  exit 255
+fi
 
 # boot up the VM
 ${vbm} startvm ${vmname} --type headless
