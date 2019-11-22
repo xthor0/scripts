@@ -221,15 +221,12 @@ config:
   name: enp0s3
   subnets:
   - type: static
-    address: ${ipaddr}
-    netmask: 255.255.255.0
-    routes:
-    - network: 0.0.0.0
-      netmask: 0.0.0.0
-      gateway: ${gateway}
-- type: nameserver
-  address: [${gateway}]
-  search: [$(grep ^search /etc/resolv.conf  | awk '{ print $2 }')]
+    address: ${ipaddr}/24
+    gateway: ${gateway}
+    dns_nameservers:
+      - ${gateway}
+    dns_search:
+      - $(grep ^search /etc/resolv.conf  | awk '{ print $2 }')
 EOF
 fi
 
