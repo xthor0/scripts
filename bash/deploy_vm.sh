@@ -3,6 +3,8 @@
 # right now, the goal is just to wrap creating a new cloud-image Ubuntu VM in a bash script
 # eventually, it'll need to be extended to include CentOS and any other images I might want to try...
 
+CLOUDINIT_IMG=/tmp/cloudinit.img
+
 # display usage
 function usage() {
     echo "`basename $0`: Build a VM from a cloud-init based image."
@@ -183,7 +185,7 @@ fi
 TEMP_D=$(mktemp -d)
 
 # generate image for cidata
-dd if=/dev/zero of=${VBOX_DIR}/${vmname}/cloudinit.img count=1 bs=1M && mkfs.vfat -n cidata ${VBOX_DIR}/${vmname}/cloudinit.img 
+dd if=/dev/zero of=${CLOUDINIT_IMG} count=1 bs=1M && mkfs.vfat -n cidata ${CLOUDINIT_IMG} 
 if [ $? -eq 0 ]; then
   cat << EOF > ${TEMP_D}/meta-data
 instance-id: 1
@@ -234,14 +236,14 @@ EOF
 fi
 
 # write the config files to the vfat image
-mcopy -i /tmp/cloudinit.img ${TEMP_D}/meta-data :: && mcopy -i /tmp/cloudinit.img ${TEMP_D}/user-data ::
+mcopy -i ${CLOUDINIT_IMG} ${TEMP_D}/meta-data :: && mcopy -i ${CLOUDINIT_IMG} ${TEMP_D}/user-data ::
 if [ $? -ne 0 ]; then
   echo "Error writing user-data or meta-data to cloudinit.img."
   exit 255
 fi
 
 if [ -n "${ipaddr}" ]; then
-  mcopy -i /tmp/cloudinit.img ${TEMP_D}/network-config ::
+  mcopy -i ${CLOUDINIT_IMG} ${TEMP_D}/network-config ::
   if [ $? -ne 0 ]; then
     echo "Error writing network-config to cloudinit.img."
     exit 255
@@ -249,7 +251,7 @@ if [ -n "${ipaddr}" ]; then
 fi
 
 # convert cloudinit.img to something that vbox can handle
-qemu-img convert -f raw -O vdi /tmp/cloudinit.img ${VBOX_DIR}/${vmname}/cloudinit.img
+qemu-img convert -f raw -O vdi ${CLOUDINIT_IMG} ${VBOX_DIR}/${vmname}/cloudinit.img
 if [ $? -ne 0 ]; then
   echo "Error running qemu-img convert. Exiting."
   exit 255
@@ -266,7 +268,7 @@ fi
 ${vbm} startvm ${vmname} --type headless
 
 # clean up files
-rm -rf ${TEMP_D} /tmp/cloudinit.img
+rm -rf ${TEMP_D} ${CLOUDINIT_IMG}
 
 # and... we're done
 echo "Done!"
