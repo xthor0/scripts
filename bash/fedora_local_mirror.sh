@@ -7,7 +7,7 @@ logfile="${HOME}/fedora_local_mirror.log"
 # run this ONCE to create a mirror for the OS itself
 # rsync -avP rsync://mirrors.xmission.com/fedora/linux/releases/31/Everything/x86_64/os/ /var/www/html/mirror/fedora/31/x86_64/os/
 
-echo "$(date) :: Starting rsync from mirrors.xmission.com for fedora updates..." >> ${logFile}
+echo "$(date) :: Starting rsync from mirrors.xmission.com for fedora updates..." >> ${logfile}
 rsync -avP --delete rsync://mirrors.xmission.com/fedora/linux/updates/31/Everything/x86_64/Packages "${updateDir}" >> ${logfile} 2>&1
 if [ $? -eq 0 ]; then
   cd "${updateDir}" && createrepo . >> ${logfile} 2>&1
