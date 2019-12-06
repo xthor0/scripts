@@ -1,12 +1,16 @@
 # Configure installation method
 install
-url --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-31&arch=x86_64"
-repo --name=fedora-updates --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f31&arch=x86_64" --cost=0
+url --url=http://buibui.xthorsworld.com/mirror/fedora/31/x86_64/os/
+repo --name=fedora-updates --baseurl=http://buibui.xthorsworld.com/mirror/fedora/31/x86_64/updates/ --cost=0
 repo --name=rpmfusion-free --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-31&arch=x86_64" --includepkgs=rpmfusion-free-release
 repo --name=rpmfusion-free-updates --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-updates-released-31&arch=x86_64" --cost=0
 repo --name=rpmfusion-nonfree --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=nonfree-fedora-31&arch=x86_64" --includepkgs=rpmfusion-nonfree-release
 repo --name=rpmfusion-nonfree-updates --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=nonfree-fedora-updates-released-31&arch=x86_64" --cost=0
 repo --name=better-fonts-copr --baseurl=https://copr-be.cloud.fedoraproject.org/results/dawid/better_fonts/fedora-31-x86_64/
+
+# to use internet mirrors replace the url and fedora-updates repo with these:
+# url --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-31&arch=x86_64"
+# repo --name=fedora-updates --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f31&arch=x86_64" --cost=0
 
 # Configure Firewall
 firewall --disabled
@@ -101,7 +105,7 @@ mate-calc
 elfutils-libelf-devel
 podman-docker
 tlp
-lxdm
+slim
 lxterminal
 xautolock
 i3lock
@@ -119,6 +123,7 @@ awscli
 gcc
 make
 perl
+numix-icon-theme
 %end
 
 # Post-installation Script
@@ -133,10 +138,6 @@ dnf -y install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release
 # make sure better_fonts copr is enabled 
 dnf -y copr enable dawid/better_fonts
 
-# install vscode repo
-rpm --import https://packages.microsoft.com/keys/microsoft.asc
-echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo
-
 # configure VirtualBox repo
 curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo > /etc/yum.repos.d/virtualbox.repo
 
@@ -144,10 +145,14 @@ curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo > /etc
 dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/
 rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 
-# set up LXDM
-sed -i 's/^# session=\/usr\/bin\/startlxde/session=\/bin\/openbox-session/g' /etc/lxdm/lxdm.conf
-
 echo "Setting up .skel files..."
+# without this, slim won't launch openbox
+cat << EOF > /etc/skel/.xinitrc
+#!/bin/bash
+exec openbox-session
+EOF
+chmod 700 /etc/skel/.xinitrc
+
 # set up skel files to run 
 mkdir -p /etc/skel/.config/openbox 
 
@@ -172,7 +177,7 @@ echo
 
 # install Slack from flatpak
 echo "Configuring Flatpak..."
-sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo && flatpak install -y flathub
+sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 if [ \$? -eq 0 ]; then
   echo "Installing Slack from flathub..."
   flatpak install -y com.slack.Slack
@@ -184,9 +189,9 @@ else
   read -n1 -s -r -p "Flatpak configuration failed, consult the error message above and press a key to continue."
 fi
 
-# install brave and vscode
-echo "Installing Brave browser, and vscode..."
-sudo dnf -y install brave-browser code
+# install brave
+echo "Installing Brave browser..."
+sudo dnf -y install brave-browser
 
 echo "Upgrading all packages with dnf..."
 
