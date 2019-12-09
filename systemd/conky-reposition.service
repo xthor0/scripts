@@ -1,0 +1,13 @@
+[Unit]
+Description=Fix window position of Conky after resume from sleep
+After=suspend.target
+
+[Service]
+User=bbrown
+Type=oneshot
+ExecStart=killall -SIGUSR1 conky
+TimeoutSec=0
+StandardOutput=syslog
+
+[Install]
+WantedBy=suspend.target
