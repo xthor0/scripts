@@ -80,7 +80,6 @@ screen
 p7zip-plugins
 iperf
 tint2
-Thunar
 xfce4-notifyd
 tlp
 x11-ssh-askpass
@@ -124,6 +123,7 @@ gcc
 make
 perl
 numix-icon-theme
+pcmanfm
 %end
 
 # Post-installation Script
@@ -145,6 +145,13 @@ curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo > /etc
 dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/
 rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 
+# install nvidia drivers (this won't work outside of post)
+#dnf -y install akmod-nvidia
+### NOTE ABOUT NVIDIA DRIVERS
+# the nvidia drivers from rpmfusion compile a driver IMMEDIATELY after installation
+# and it happens in the background - so, unless I hard-code a sleep or something, the
+# drivers aren't gonna work on reboot.
+
 echo "Setting up .skel files..."
 # without this, slim won't launch openbox
 cat << EOF > /etc/skel/.xinitrc
@@ -158,6 +165,9 @@ mkdir -p /etc/skel/.config/openbox
 
 cat << EOF > /etc/skel/.config/openbox/autostart
 # this should be deleted by .fedcrunch-setup 
+/usr/lib64/xfce4/notifyd/xfce4-notifyd &
+nm-applet &
+tint2 &
 lxterminal -e \${HOME}/.fedcrunch-setup 
 EOF
 chmod 700 /etc/skel/.config/openbox/autostart
