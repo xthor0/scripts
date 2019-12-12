@@ -1,6 +1,7 @@
 # Configure installation method
 install
 url --url=http://buibui.xthorsworld.com/mirror/fedora/31/x86_64/os/
+# DO NOT DO NOT ENABLE THIS! on F31, pulling in updates during installation broke wifi permanently!
 # repo --name=fedora-updates --baseurl=http://buibui.xthorsworld.com/mirror/fedora/31/x86_64/updates/ --cost=0
 repo --name=rpmfusion-free --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-31&arch=x86_64" --includepkgs=rpmfusion-free-release
 repo --name=rpmfusion-free-updates --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-updates-released-31&arch=x86_64" --cost=0
