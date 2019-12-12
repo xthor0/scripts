@@ -1,7 +1,7 @@
 # Configure installation method
 install
 url --url=http://buibui.xthorsworld.com/mirror/fedora/31/x86_64/os/
-repo --name=fedora-updates --baseurl=http://buibui.xthorsworld.com/mirror/fedora/31/x86_64/updates/ --cost=0
+# repo --name=fedora-updates --baseurl=http://buibui.xthorsworld.com/mirror/fedora/31/x86_64/updates/ --cost=0
 repo --name=rpmfusion-free --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-31&arch=x86_64" --includepkgs=rpmfusion-free-release
 repo --name=rpmfusion-free-updates --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=free-fedora-updates-released-31&arch=x86_64" --cost=0
 repo --name=rpmfusion-nonfree --mirrorlist="https://mirrors.rpmfusion.org/mirrorlist?repo=nonfree-fedora-31&arch=x86_64" --includepkgs=rpmfusion-nonfree-release
@@ -118,7 +118,6 @@ libreoffice
 mupdf
 virtualbox-guest-additions
 genisoimage
-awscli
 gcc
 make
 perl
@@ -202,6 +201,9 @@ fi
 # install brave
 echo "Installing Brave browser..."
 sudo dnf -y install brave-browser
+
+# install awscli (I get an error if I put it in the package list)
+sudo dnf -y install awscli
 
 echo "Upgrading all packages with dnf..."
 
@@ -288,10 +290,11 @@ sudo reboot
 EOF
 chmod 700 /etc/skel/.fedcrunch-setup
 
-chvt 1
+#chvt 1
 
 # FIN
 %end
 
 # Reboot After Installation
-reboot
+# commented 'cause this doesn't effing work and on my Chromebook, it just hangs. Stupid.
+reboot --eject
