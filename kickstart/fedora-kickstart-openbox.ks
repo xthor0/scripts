@@ -245,10 +245,10 @@ fi
 popd
 
 # get chassis type
-chassistype=$(hostnamectl status | grep Chassis | awk '{ print $2 }')
+chassistype=\$(hostnamectl status | grep Chassis | awk '{ print $2 }')
 
 # set up SSH if we're a desktop, TLP if we're a laptop 
-if [ "$chassistype" == "laptop" ]; then
+if [ "\$chassistype" == "laptop" ]; then
   echo "Enabling tlp at boot..."
   sudo systemctl enable tlp
 else
