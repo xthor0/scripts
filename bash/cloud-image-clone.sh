@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # right now, the goal is just to wrap creating a new cloud-image Ubuntu VM in a bash script
 # eventually, it'll need to be extended to include CentOS and any other images I might want to try...
@@ -28,11 +28,12 @@ function is_int() {
     fi
 }
 
+# todo: build in static IP functionality
 # get command-line args
-while getopts "n:i:f:s:c:r:" OPTION; do
+while getopts "n:if:s:c:r:" OPTION; do
     case $OPTION in
         n) vmname="$OPTARG";;
-        i) ipaddr="$OPTARG";;
+        i) staticip="yes";;
         f) flavor="$OPTARG";;
         s) storage="$OPTARG";;
         c) cpu="$OPTARG";;
@@ -78,22 +79,31 @@ else
     cpu=1
 fi
 
+### download locations for images
+# CentOS 7: https://cloud.centos.org/centos/7/images/?C=M;O=D -- download the qcow2.xz images
+# Ubuntu: https://cloud-images.ubuntu.com/
+# conversion example for linux: download qcow2 images, and then: qemu-img convert -f qcow2 -O vdi CentOS-7-x86_64-GenericCloud-1905.qcow2 ../centos7-1905.vdi
+# for osx: download the raw images, and then: VBoxManage convertfromraw CentOS-7-x86_64-GenericCloud-1907.raw ~/tmp/cloudimage/centos7-1907.vdi --format vdi
+
 # turn the flavor variable into a location for images
 case ${flavor} in
     bionic) image="${HOME}/tmp/cloudimage/bionic-server-cloudimg-amd64.vdi";;
-    centos7) image="${HOME}/tmp/cloudimage/centos7-1905.vdi";;
+    centos7) image="${HOME}/tmp/cloudimage/centos7-1907.vdi";;
     centos7-1804) image="${HOME}/tmp/cloudimage/centos7-1804.vdi";;
     *) bad_taste;;
 esac
 
-### download locations for images
-# CentOS 7: https://cloud.centos.org/centos/7/images/?C=M;O=D -- download the qcow2.xz images
-# Ubuntu: https://cloud-images.ubuntu.com/
-# conversion example: qemu-img convert -f qcow2 -O vdi CentOS-7-x86_64-GenericCloud-1905.qcow2 ../centos7-1905.vdi
-
 # set a variable here, just in case Oracle ever changes shit
-vbm="/usr/bin/vboxmanage"
-
+# it's in different places on Linux than OSX
+if [ -x /usr/bin/vboxmanage ]; then
+    vbm="/usr/bin/vboxmanage"
+elif [ -x /usr/local/bin/vboxmanage ]; then
+    vbm="/usr/local/bin/vboxmanage"
+else
+    echo "I don't know where vboxmanage is. Exiting."
+    exit 255
+fi
+ 
 ### BEGIN
 # make sure the VM doesn't already exist...
 vboxmanage list vms | grep -qw ${vmname}
@@ -128,35 +138,7 @@ for cmd in ${cmdlist[*]}; do
     fi
 done
 
-# create a temp dir for cloud-init iso
-ISOTMP=$(mktemp -d)
-
-cat << EOF | tee ${ISOTMP}/meta-data
-instance-id: 1
-local-hostname: ${vmname}
-EOF
-if [ $? -ne 0 ]; then
-    echo "Error creating ${ISOTMP}/meta-data."
-    exit 255
-fi
-
-cat << EOF | tee ${ISOTMP}/user-data
-#cloud-config
-users:
-    - name: root
-      passwd: toor
-      ssh_authorized_keys:
-        - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCfu9au0EkA02pnruvqLcquikJim4VgQg61YxwG0LauDv+qM0j4EPDfzQtN3GMfyPs/i79NeNNndvfc2vqYJt8sVwjegoNF9h8jDytaWZ7zzblhY7qBkwtAVZ6ADgTY/w28CkB80dRPey2E4FGxING6AzieYwoHsKmaMt6IumOJlo01HoeouW7OP8qg51n8EHKmov5oA4DzzDx/UkS0aDDKpp38hIj0DHkcK8jhi5eZoEM7hOgaW+Efj6t/XzpoOhQVytsJXxqzZ/+4UDVfJ3FTQLmI+hdymbyxYL5i2FCK5kMldGyZuZz9h9ikM9xHWSmKIeTevut9/chveUR/W/E2qqziqm8fCoZZ2WIHfhy+Bt0OcLUro2Gpe7S0i8uCbvNK60OpE+hf9GxAv+G0UUCuSxJtKqrpgi5xNifvXaT3pk5Uxr/1+g+tiMyoaZxCmJPz7IZU7y9lurTAhYT0HgkcU4OZpGS1/x+rGu2f0un3UkUJyYFpgjfjw9iu9Y/0H7k= bbrown@bbrown-l
-timezone: America/Denver
-runcmd:
-    - touch /etc/cloud/cloud-init.disabled
-    - eject cdrom
-EOF
-if [ $? -ne 0 ]; then
-    echo "Error creating ${ISOTMP}/user-data - exiting."
-    exit 255
-fi
-
+function keeping_this_because_Ill_use_it() {
 ## this works! I could use it to config static IPs, if I need to.
 if [ -n "${ipaddr}" ]; then
     cat << EOF | tee ${ISOTMP}/network-config
@@ -187,23 +169,12 @@ EOF
         exit 255
     fi
 fi
+}
 
-# generate ISO
-pushd ${ISOTMP}
-genisoimage -output ~/VirtualBox\ VMs/${vmname}/${vmname}-ci.iso -volid cidata -joliet -r . 
+# set smbios data so cloudinit functions over the network
+${vbm} setextradata ${vmname} "VBoxInternal/Devices/pcbios/0/Config/DmiSystemSerial" "ds=nocloud-net;s=http://10.187.88.1/cloudinit.php?vmname=${vmname}&/"
 if [ $? -ne 0 ]; then
-    echo "Uh-oh - genisoimage failed!"
-    exit 255
-fi
-popd 
-
-# clean up temp
-rm -rf ${ISOTMP}
-
-# attach ISO to VM
-${vbm} storageattach ${vmname} --storagectl "SATA Controller" --port 1 --device 0 --type dvddrive --medium ~/VirtualBox\ VMs/${vmname}/${vmname}-ci.iso
-if [ $? -ne 0 ]; then
-    echo "Error attaching ${vmname}-ci.iso to ${vmname} - exiting."
+    echo "Error running setextradata command. Exiting."
     exit 255
 fi
 
