@@ -124,13 +124,31 @@ make
 perl
 numix-icon-theme
 pcmanfm
+firefox
 %end
 
 # Post-installation Script
 #%post --erroronfail
 #exec < /dev/tty3 > /dev/tty3
 #chvt 3
-%post
+%post --log=/root/kickstart-post.log
+
+# install nvidia drivers (this won't work outside of post)
+#dnf -y install akmod-nvidia
+### NOTE ABOUT NVIDIA DRIVERS
+# the nvidia drivers from rpmfusion compile a driver IMMEDIATELY after installation
+# and it happens in the background - so, unless I hard-code a sleep or something, the
+# drivers aren't gonna work on reboot.
+
+# set up chrome repo
+cat << EOF | sudo tee /etc/yum.repos.d/google-chrome.repo
+[google-chrome]
+name=google-chrome
+baseurl=http://dl.google.com/linux/chrome/rpm/stable/x86_64
+enabled=1
+gpgcheck=1
+gpgkey=https://dl-ssl.google.com/linux/linux_signing_key.pub
+EOF
 
 # install rpmfusion release packages
 dnf -y install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-31.noarch.rpm http://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-31.noarch.rpm
@@ -144,13 +162,6 @@ curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo > /etc
 # brave browser
 dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/
 rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
-
-# install nvidia drivers (this won't work outside of post)
-#dnf -y install akmod-nvidia
-### NOTE ABOUT NVIDIA DRIVERS
-# the nvidia drivers from rpmfusion compile a driver IMMEDIATELY after installation
-# and it happens in the background - so, unless I hard-code a sleep or something, the
-# drivers aren't gonna work on reboot.
 
 echo "Setting up .skel files..."
 # without this, slim won't launch openbox
@@ -203,6 +214,10 @@ fi
 echo "Installing Brave browser..."
 sudo dnf -y install brave-browser
 
+# install google chrome
+echo "Installing Google Chrome..."
+sudo dnf -y install google-chrome-stable
+
 # install awscli (I get an error if I put it in the package list)
 sudo dnf -y install awscli
 
@@ -245,7 +260,7 @@ fi
 popd
 
 # get chassis type
-chassistype=\$(hostnamectl status | grep Chassis | awk '{ print $2 }')
+chassistype=\$(hostnamectl status | grep Chassis | awk '{ print \$2 }')
 
 # set up SSH if we're a desktop, TLP if we're a laptop 
 if [ "\$chassistype" == "laptop" ]; then
