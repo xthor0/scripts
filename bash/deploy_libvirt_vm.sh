@@ -128,6 +128,7 @@ users:
 timezone: America/Denver
 runcmd:
     - touch /etc/cloud/cloud-init.disabled
+    - yum -y install epel-release && yum -y install sysbench
 EOF
 else
   echo "error creating cloudinit.img -- exiting."
@@ -176,7 +177,7 @@ fi
 rm -rf "${TEMP_D}"
 
 # deploy the VM
-virt-install --virt-type=kvm --name ${vmname} --ram ${memory} --vcpus ${cpu} --os-variant=centos7.0 --network=bridge=br0,model=virtio --graphics vnc --disk path=${HDD_IMG},cache=none --import --disk path=${CLOUDINIT_IMG},cache=none --noautoconsole
+virt-install --virt-type=kvm --name ${vmname} --ram ${memory} --vcpus ${cpu} --os-variant=centos7.0 --network=bridge=br0,model=virtio --graphics vnc --disk path=${HDD_IMG},cache=writeback --import --disk path=${CLOUDINIT_IMG},cache=none --noautoconsole
 
 # done, I think :)
 exit 0
