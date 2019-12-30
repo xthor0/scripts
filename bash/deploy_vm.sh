@@ -3,6 +3,8 @@
 # right now, the goal is just to wrap creating a new cloud-image Ubuntu VM in a bash script
 # eventually, it'll need to be extended to include CentOS and any other images I might want to try...
 
+CLOUDINIT_IMG=/tmp/cloudinit.img
+
 # display usage
 function usage() {
     echo "`basename $0`: Build a VM from a cloud-init based image."
@@ -30,14 +32,14 @@ function is_int() {
 
 # todo: build in static IP functionality
 # get command-line args
-while getopts "n:if:s:c:r:" OPTION; do
+while getopts "n:i:f:s:c:r:" OPTION; do
     case $OPTION in
         n) vmname="$OPTARG";;
-        i) staticip="yes";;
         f) flavor="$OPTARG";;
         s) storage="$OPTARG";;
         c) cpu="$OPTARG";;
         r) ram="$OPTARG";;
+        i) ipaddr="$OPTARG";;
         *) usage;;
     esac
 done
@@ -45,12 +47,6 @@ done
 # verify command-line args
 if [ -z "${vmname}" -o -z "${flavor}" ]; then
     usage
-fi
-
-# I'll code the static IP stuff later...
-if [ -n "${staticip}" ]; then
-    echo "-i is a broken option, sorry."
-    exit 255
 fi
 
 # if storage is not specified, default to 8GB
@@ -186,16 +182,38 @@ if [ $? -ne 0 ]; then
     exit 255
 fi
 
-# set CLOUDINIT_HOST if we didn't get it from .deploy_vm
-if [ -z "${CLOUDINIT_HOST}" ]; then
-    CLOUDINIT_HOST=10.187.88.1
+TEMP_D=$(mktemp -d)
+
+# generate image for cidata
+dd if=/dev/zero of=${CLOUDINIT_IMG} count=1 bs=1M && mkfs.vfat -n cidata ${CLOUDINIT_IMG} 
+if [ $? -eq 0 ]; then
+  cat << EOF > ${TEMP_D}/meta-data
+instance-id: 1
+local-hostname: ${vmname}
+EOF
+  # generate the password with this command: mkpasswd --method=SHA-512 --stdin
+  # ESCAPE YOUR DOLLAR SIGNS or stuff won't work!
+  cat << EOF > ${TEMP_D}/user-data
+#cloud-config
+users:
+  - name: xthor
+    passwd: \$6\$w6ZFMnTUXqAniT9h\$0qwEbOsSRmI4alw6CZTB/.6i89GObwMk/yit7SaNSxvM10ENTIEjK0Pvl.4eC3tzGq1Dd81SKoyxdPSpiLM100
+    lock_passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSUppn5b2njEQSw8FHqyZ0OZiPD14wEejulwnQ7gxLdQYJEqXMleHx4u/9ff3/jDXoGaBFiT2LmUTnpMV8HSj4jsB4PCoFAbq4XnlnwyBx7va/8LQOMdKsjF5W6peO+DYKh+ow9YaJvctzGPebkkNvhI0YFhZod58uoO7lyTnQXkMm8DXl6q7WhNfsZZiwr7tXicUZojU0msMiDpX1JvhGow+mKym0U/6cMgozypYfNbQ2PVkfNnadslp29O5Mfd5X4U+cbACa1sUYYqOT2Zz8C4t5QFXRY1LNokmRbcqbO01bygbE4S2TDnvRz+XZmfZTuw9MMgp7JPfo6cOfDYKf xthor
+timezone: America/Denver
+runcmd:
+    - touch /etc/cloud/cloud-init.disabled
+EOF
+else
+  echo "error creating cloudinit.img -- exiting."
+  exit 255
 fi
 
-function keeping_this_because_Ill_use_it() {
-## this works! I could use it to config static IPs, if I need to.
 if [ -n "${ipaddr}" ]; then
-    cat << EOF | tee ${ISOTMP}/network-config
-
+  gateway=$(ip route | grep ^default | awk '{ print $3 }')
+  cat << EOF > ${TEMP_D}/network-config
 ## /network-config on NoCloud cidata disk
 ## version 1 format
 ## version 2 is completely different, see the docs
@@ -207,32 +225,49 @@ config:
   name: enp0s3
   subnets:
   - type: static
-    address: ${ipaddr}
-    netmask: 255.255.255.0
-    routes:
-    - network: 0.0.0.0
-      netmask: 0.0.0.0
-      gateway: 10.187.88.1
-- type: nameserver
-  address: [10.187.88.1]
-  search: [.lab]
+    address: ${ipaddr}/24
+    gateway: ${gateway}
+    dns_nameservers:
+      - ${gateway}
+    dns_search:
+      - $(grep ^search /etc/resolv.conf  | awk '{ print $2 }')
 EOF
-    if [ $? -ne 0 ]; then
-        echo "Error creating ${ISOTMP}/network-config - exiting."
-        exit 255
-    fi
 fi
-}
 
-# set smbios data so cloudinit functions over the network
-${vbm} setextradata ${vmname} "VBoxInternal/Devices/pcbios/0/Config/DmiSystemSerial" "ds=nocloud-net;s=http://${CLOUDINIT_HOST}/cloudinit.php?vmname=${vmname}&/"
+# write the config files to the vfat image
+mcopy -i ${CLOUDINIT_IMG} ${TEMP_D}/meta-data :: && mcopy -i ${CLOUDINIT_IMG} ${TEMP_D}/user-data ::
 if [ $? -ne 0 ]; then
-    echo "Error running setextradata command. Exiting."
+  echo "Error writing user-data or meta-data to cloudinit.img."
+  exit 255
+fi
+
+if [ -n "${ipaddr}" ]; then
+  mcopy -i ${CLOUDINIT_IMG} ${TEMP_D}/network-config ::
+  if [ $? -ne 0 ]; then
+    echo "Error writing network-config to cloudinit.img."
     exit 255
+  fi
+fi
+
+# convert cloudinit.img to something that vbox can handle
+qemu-img convert -f raw -O vdi ${CLOUDINIT_IMG} ${VBOX_DIR}/${vmname}/cloudinit.img
+if [ $? -ne 0 ]; then
+  echo "Error running qemu-img convert. Exiting."
+  exit 255
+fi
+
+# attach the cloudinit.img to the VM
+${vbm} storageattach ${vmname} --storagectl sata_c1 --port 1 --device 0 --type hdd --medium ${VBOX_DIR}/${vmname}/cloudinit.img
+if [ $? -ne 0 ]; then
+  echo "Error attaching cloudinit.img to ${vmname}. Exiting."
+  exit 255
 fi
 
 # boot up the VM
 ${vbm} startvm ${vmname} --type headless
+
+# clean up files
+rm -rf ${TEMP_D} ${CLOUDINIT_IMG}
 
 # and... we're done
 echo "Done!"
