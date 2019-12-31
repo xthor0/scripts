@@ -104,6 +104,10 @@ HDD_IMG="${vmdir}/${vmname}/${vmname}.qcow2"
 
 # copy the source image to the destination
 cp "${image}" ${HDD_IMG}
+if [ $? -ne 0 ]; then
+    echo "Error copying ${image} to ${HDD_IMG}. Exiting!"
+    exit 255
+fi
 
 # generate image for cidata
 dd if=/dev/zero of=${CLOUDINIT_IMG} count=1 bs=1M && mkfs.vfat -n cidata ${CLOUDINIT_IMG}
