@@ -128,7 +128,6 @@ users:
 timezone: America/Denver
 runcmd:
     - touch /etc/cloud/cloud-init.disabled
-    - yum -y install epel-release && yum -y install sysbench
 EOF
 else
   echo "error creating cloudinit.img -- exiting."
