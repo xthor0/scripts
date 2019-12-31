@@ -86,7 +86,7 @@ vmdir=/storage/vms
 # turn the flavor variable into a location for images
 case ${flavor} in
     bionic) image="/storage/cloudimage/bionic-server-cloudimg-amd64.img";;
-    centos7) image="/storage/cloudimage/CentOS-7-x86_64-GenericCloud-1907.qcow2c";;
+    centos7) image="/storage/cloudimage/CentOS-7-x86_64-GenericCloud-1907.img";;
     *) bad_taste;;
 esac
 
