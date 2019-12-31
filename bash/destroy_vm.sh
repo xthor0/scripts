@@ -33,16 +33,12 @@ if [ $? -eq 0 ]; then
     virsh destroy "${vmname}"
 
     # find out what directory these VMs were in
-    while read line; do
-        vmdir="$(dirname "${line}")"
-        if [ -n "${last_vmdir}" ]; then
-            if [ "${last_vmdir}" == "${cur_vmdir}" ]; then
-                last_vmdir="$(dirname "${line}")"
-            else
-                echo "How the hell did you create this VM? You'll have to clean up manually."
-            fi
-        fi
-    done <<< $(virsh dumpxml --domain "${vmname}" | grep 'source file' | awk '{ print $2 }' | cut -d \' -f 2)
+    xmldump=$(virsh dumpxml --domain "${vmname}" | grep 'source file' | awk '{ print $2 }' | cut -d \' -f 2 | tr \\n :)
+
+    # parse the info we dumped for the dirname
+    # we're going to assume that everything is in the same dir
+    # otherwise the vm was built manually, which... is dumb
+    vmdir=$(dirname "$(echo ${xmldump} | cut -d \: -f 1)")
 
     # decide if we're REALLY deleting it
     if [ -n "${delete}" ]; then
