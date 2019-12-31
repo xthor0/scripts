@@ -29,7 +29,21 @@ fi
 # does the VM even exist?
 virsh list --all | grep -q ${vmname}
 if [ $? -eq 0 ]; then
-    # we need to find the dirname of the drive location
+    # forcefully power off the VM
+    virsh destroy "${vmname}"
+
+    # find out what directory these VMs were in
+    virsh dumpxml --domain "${vmname}" | grep 'source file' | awk '{ print $2 }' | cut -d \' -f 2 | while read line; do
+        cur_vmdir="$(dirname "${line}")"
+        if [ -n "${last_vmdir}" ]; then
+            if [ "${last_vmdir}" == "${cur_vmdir}" ]; then
+                vmdir="$(dirname "${line}")"
+                last_vmdir="$(dirname "${line}")"
+            else
+                echo "How the hell did you create this VM? You'll have to clean up manually."
+            fi
+        fi
+    done
 
     # decide if we're REALLY deleting it
     if [ -n "${delete}" ]; then
@@ -44,6 +58,15 @@ if [ $? -eq 0 ]; then
         echo "VM ${vmname} deleted successfully."
     else
         echo "Error! See output above."
+    fi
+
+    # make sure vmdir is empty, and then remove it
+    find "${vmdir}" | read
+    if [ $? -eq 0 ]; then
+        rmdir "${vmdir}"
+    else
+        echo "Oops, something didn't clean up right."
+        echo "${vmdir} is not empty!"
     fi
 else
     echo "VM ${vmname} does not exist."
