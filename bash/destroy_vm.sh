@@ -33,7 +33,7 @@ if [ $? -eq 0 ]; then
     virsh destroy "${vmname}"
 
     # find out what directory these VMs were in
-    virsh dumpxml --domain "${vmname}" | grep 'source file' | awk '{ print $2 }' | cut -d \' -f 2 | while read line; do
+    while read line; do
         vmdir="$(dirname "${line}")"
         if [ -n "${last_vmdir}" ]; then
             if [ "${last_vmdir}" == "${cur_vmdir}" ]; then
@@ -42,7 +42,7 @@ if [ $? -eq 0 ]; then
                 echo "How the hell did you create this VM? You'll have to clean up manually."
             fi
         fi
-    done
+    done <<< $(virsh dumpxml --domain "${vmname}" | grep 'source file' | awk '{ print $2 }' | cut -d \' -f 2)
 
     # decide if we're REALLY deleting it
     if [ -n "${delete}" ]; then
