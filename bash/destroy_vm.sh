@@ -34,10 +34,9 @@ if [ $? -eq 0 ]; then
 
     # find out what directory these VMs were in
     virsh dumpxml --domain "${vmname}" | grep 'source file' | awk '{ print $2 }' | cut -d \' -f 2 | while read line; do
-        cur_vmdir="$(dirname "${line}")"
+        vmdir="$(dirname "${line}")"
         if [ -n "${last_vmdir}" ]; then
             if [ "${last_vmdir}" == "${cur_vmdir}" ]; then
-                vmdir="$(dirname "${line}")"
                 last_vmdir="$(dirname "${line}")"
             else
                 echo "How the hell did you create this VM? You'll have to clean up manually."
