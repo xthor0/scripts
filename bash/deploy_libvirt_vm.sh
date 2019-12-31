@@ -82,17 +82,15 @@ fi
 # Ubuntu: https://cloud-images.ubuntu.com/
 # Example: https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-amd64.img
 
+vmdir=/storage/vms
 # turn the flavor variable into a location for images
 case ${flavor} in
-    bionic) image="${HOME}/cloudimage/bionic-server-cloudimg-amd64.img";;
-    centos7) image="${HOME}/cloudimage/CentOS-7-x86_64-GenericCloud-1907.qcow2c";;
+    bionic) image="${vmdir}/cloudimage/bionic-server-cloudimg-amd64.img";;
+    centos7) image="${vmdir}/cloudimage/CentOS-7-x86_64-GenericCloud-1907.qcow2c";;
     *) bad_taste;;
 esac
 
 ### we've passed all the basic checks - build the VM
-# we need to make the target dir for the VM
-# this needs some work, I'm not sure where libvirt stores them by default...
-vmdir=/storage/vms
 test -d ${vmdir}/${vmname} || mkdir -p "${vmdir}/${vmname}"
 if [ $? -ne 0 ]; then
     echo "Unable to create directory ${vmdir}/${vmname} -- exiting."
@@ -174,6 +172,9 @@ fi
 
 # we can clean up the temp dir now
 rm -rf "${TEMP_D}"
+
+## TODO: I need the ability to change the vlan!
+# should be as easy as changing the bridged adapter.
 
 # deploy the VM
 virt-install --virt-type=kvm --name ${vmname} --ram ${memory} --vcpus ${cpu} --os-variant=centos7.0 --network=bridge=br-vlan03,model=virtio --graphics vnc --disk path=${HDD_IMG},cache=writeback --import --disk path=${CLOUDINIT_IMG},cache=none --noautoconsole
