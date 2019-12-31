@@ -143,7 +143,7 @@ if [ -n "${ipaddr}" ]; then
 version: 1
 config:
 - type: physical
-  name: enp0s3
+  name: eth0
   subnets:
   - type: static
     address: ${ipaddr}/24
