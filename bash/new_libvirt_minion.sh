@@ -75,33 +75,32 @@ else
     cpu=1
 fi
 
-### downloading and converting the images
-# CentOS 7: https://cloud.centos.org/centos/7/images/?C=M;O=D
-# Download the qcow2 image, for example: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud-1907.qcow2c
-
-# Ubuntu: https://cloud-images.ubuntu.com/
-# Example: https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-amd64.img
-
 vmdir=/home/xthor/vms
 # turn the flavor variable into a location for images
 case ${flavor} in
-    bionic) image="/home/xthor/vms/cloudimage/bionic-server-cloudimg-amd64.img";;
-    centos7) image="/home/xthor/vms/cloudimage/CentOS-7-x86_64-GenericCloud-1907.img";;
+    bionic) image="/storage/cloudimage/bionic-server-cloudimg-amd64.img"; variant="ubuntu18.04";;
+    centos7) image="/storage/cloudimage/CentOS-7-x86_64-GenericCloud-1907.img"; variant="centos7.0";;
+    debian10) image="/storage/cloudimage/debian-10-openstack-amd64.qcow2"; variant="debian10";;
+    debian9) image="/storage/cloudimage/debian-9-openstack-amd64.qcow2"; variant="debian9";;
     *) bad_taste;;
 esac
 
-### we've passed all the basic checks - build the VM
-test -d ${vmdir}/${vmname} || mkdir -p "${vmdir}/${vmname}"
-if [ $? -ne 0 ]; then
-    echo "Unable to create directory ${vmdir}/${vmname} -- exiting."
-    exit 255
-fi
+# set vars for the ci image and the OS image
+CLOUDINIT_IMG="${vmdir}/${vmname}-nocloud.img"
+HDD_IMG="${vmdir}/${vmname}-os.qcow2"
 
-# set some variables
+# make sure they don't exist, or we exit
+for file in "${CLOUDINIT_IMG}" "${HDD_IMG}"; do
+    if [ -f "${file}" ]; then
+        echo "${file} already exists -- exiting."
+        exit 255
+    fi
+done
+
+# create a temp dir for meta-data, and set vars for the images
 TEMP_D=$(mktemp -d)
-CLOUDINIT_IMG="${vmdir}/${vmname}/cloudinit.img"
-HDD_IMG="${vmdir}/${vmname}/${vmname}.qcow2"
 
+### we've passed all the basic checks - build the VM
 # copy the source image to the destination
 cp "${image}" ${HDD_IMG}
 if [ $? -ne 0 ]; then
@@ -111,55 +110,18 @@ fi
 
 # generate image for cidata
 dd if=/dev/zero of=${CLOUDINIT_IMG} count=1 bs=1M && mkfs.vfat -n cidata ${CLOUDINIT_IMG}
-if [ $? -eq 0 ]; then
-  cat << EOF > ${TEMP_D}/meta-data
-instance-id: 1
-local-hostname: ${vmname}
-EOF
-  # generate the password with this command: mkpasswd --method=SHA-512 --stdin
-  # ESCAPE YOUR DOLLAR SIGNS or stuff won't work!
-  cat << EOF > ${TEMP_D}/user-data
-#cloud-config
-users:
-  - name: xthor
-    passwd: \$6\$w6ZFMnTUXqAniT9h\$0qwEbOsSRmI4alw6CZTB/.6i89GObwMk/yit7SaNSxvM10ENTIEjK0Pvl.4eC3tzGq1Dd81SKoyxdPSpiLM100
-    lock_passwd: false
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    ssh_authorized_keys:
-      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDSUppn5b2njEQSw8FHqyZ0OZiPD14wEejulwnQ7gxLdQYJEqXMleHx4u/9ff3/jDXoGaBFiT2LmUTnpMV8HSj4jsB4PCoFAbq4XnlnwyBx7va/8LQOMdKsjF5W6peO+DYKh+ow9YaJvctzGPebkkNvhI0YFhZod58uoO7lyTnQXkMm8DXl6q7WhNfsZZiwr7tXicUZojU0msMiDpX1JvhGow+mKym0U/6cMgozypYfNbQ2PVkfNnadslp29O5Mfd5X4U+cbACa1sUYYqOT2Zz8C4t5QFXRY1LNokmRbcqbO01bygbE4S2TDnvRz+XZmfZTuw9MMgp7JPfo6cOfDYKf xthor
-timezone: America/Denver
-yum_repos:
-  salt-latest:
-    baseurl: https://repo.saltstack.com/yum/redhat/7/\$basearch/latest
-    enabled: true
-    failovermethod: priority
-    gpgcheck: true
-    gpgkey: https://repo.saltstack.com/py3/redhat/7/x86_64/latest/SALTSTACK-GPG-KEY.pub
-    name: SaltStack Latest Release Channel for RHEL/Centos \$releasever
-packages:
-  - epel-release
-  - salt-minion
-  - salt-ssh
-  - vim-enhanced
-  - bash-completion
-  - wget
-  - rsync
-  - deltarpm
-package_upgrade: true
-power_state:
-  delay: now
-  mode: reboot
-  message: Rebooting for updates
-  condition: True
-runcmd:
-    - touch /etc/cloud/cloud-init.disabled
-    - systemctl enable salt-minion
-EOF
-else
+if [ $? -ne 0 ]; then
   echo "error creating cloudinit.img -- exiting."
   exit 255
 fi
 
+# meta-data is where the hostname gets set
+cat << EOF > ${TEMP_D}/meta-data
+instance-id: 1
+local-hostname: ${vmname}.laptop.lab
+EOF
+
+# network-config is only necessary if we're setting a static IP address
 if [ -n "${ipaddr}" ]; then
   gateway=$(ip route | grep ^default | awk '{ print $3 }')
   cat << EOF > ${TEMP_D}/network-config
@@ -183,6 +145,14 @@ config:
 EOF
 fi
 
+# copy in the user-data for the $flavor specified
+ci_dir="/home/xthor/git/scripts/cloud-init"
+cp "${ci_dir}/${flavor}.user-data" ${TEMP_D}/user-data
+if [ $? -ne 0 ]; then
+    echo "Error copying ${ci-dir}/${flavor}.user-data to ${TEMP_D} -- exiting!"
+    exit 255
+fi
+
 # write the config files to the vfat image
 mcopy -i ${CLOUDINIT_IMG} ${TEMP_D}/meta-data :: && mcopy -i ${CLOUDINIT_IMG} ${TEMP_D}/user-data ::
 if [ $? -ne 0 ]; then
@@ -201,11 +171,8 @@ fi
 # we can clean up the temp dir now
 rm -rf "${TEMP_D}"
 
-## TODO: I need the ability to change the vlan!
-# should be as easy as changing the bridged adapter.
-
 # deploy the VM
-virt-install --virt-type=kvm --name ${vmname} --ram ${memory} --vcpus ${cpu} --os-variant=centos7.0 --network=bridge=virbr0,model=virtio --graphics vnc --disk path=${HDD_IMG},cache=writeback --import --disk path=${CLOUDINIT_IMG},cache=none --noautoconsole
+virt-install --virt-type=kvm --name ${vmname} --ram ${memory} --vcpus ${cpu} --os-variant=${variant} --network=bridge=virbr0,model=virtio --graphics vnc --disk path=${HDD_IMG},cache=writeback --import --disk path=${CLOUDINIT_IMG},cache=none --noautoconsole
 
 # done, I think :)
 exit 0
