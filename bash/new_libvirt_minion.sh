@@ -26,7 +26,7 @@ function is_int() {
 }
 
 # get command-line args
-while getopts "n:i:f:s:c:r:" OPTION; do
+while getopts "n:i:f:s:c:r:o" OPTION; do
     case $OPTION in
         n) vmname="$OPTARG";;
         f) flavor="$OPTARG";;
@@ -34,6 +34,7 @@ while getopts "n:i:f:s:c:r:" OPTION; do
         c) cpu="$OPTARG";;
         r) ram="$OPTARG";;
         i) ipaddr="$OPTARG";;
+        o) nosalt="true";;
         *) usage;;
     esac
 done
@@ -75,11 +76,12 @@ else
     cpu=1
 fi
 
-vmdir=/home/xthor/vms
+vmdir=${HOME}/vms
 # turn the flavor variable into a location for images
 case ${flavor} in
     bionic) image="/storage/cloudimage/bionic-server-cloudimg-amd64.img"; variant="ubuntu18.04";;
-    centos7) image="/storage/cloudimage/CentOS-7-x86_64-GenericCloud-1907.img"; variant="centos7.0";;
+    centos7) image="/storage/cloudimage/CentOS-7-x86_64-GenericCloud.qcow2"; variant="centos7.0";;
+    centos-atomic7) image="/storage/cloudimage/CentOS-Atomic-Host-7.1910-GenericCloud.qcow2"; variant="centos7.0";;
     debian10) image="/storage/cloudimage/debian-10-openstack-amd64.qcow2"; variant="debian10";;
     debian9) image="/storage/cloudimage/debian-9-openstack-amd64.qcow2"; variant="debian9";;
     *) bad_taste;;
@@ -145,12 +147,37 @@ config:
 EOF
 fi
 
-# copy in the user-data for the $flavor specified
-ci_dir="/home/xthor/git/scripts/cloud-init"
-cp "${ci_dir}/${flavor}.user-data" ${TEMP_D}/user-data
-if [ $? -ne 0 ]; then
-    echo "Error copying ${ci-dir}/${flavor}.user-data to ${TEMP_D} -- exiting!"
-    exit 255
+if [ -z "${nosalt}" ]; then
+    # copy in the user-data for the $flavor specified
+    ci_dir="/home/xthor/git/scripts/cloud-init"
+    cp "${ci_dir}/${flavor}.user-data" ${TEMP_D}/user-data
+    if [ $? -ne 0 ]; then
+        echo "Error copying ${ci-dir}/${flavor}.user-data to ${TEMP_D} -- exiting!"
+        exit 255
+    fi
+else
+    # deploying WITHOUT salt is MUCH simpler...
+    # TODO: I should automate something with salt-ssh to push the state to the minion. It'd be easier than all the damn cloud-init scripts I'm storing.
+    # especially now that this script is dynamic.
+    cat << EOF > ${TEMP_D}/user-data
+#cloud-config
+users:
+  - name: $(whoami)
+    shell: /bin/bash
+    passwd: \$6\$Og9AInwoEYIew7ZM\$HCaWJyipauykgO1ZHP4/6y.r6aTpg0xHKX/LYWKnL5k1gQK4I3J75LEFj6a5yu31.GAceO9ORyNy.lnbe2MZL.
+    lock_passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ssh-rsa $(cat ~/.ssh/id_rsa.pub | awk '{ print $2 }') $(whoami)
+timezone: America/Denver
+package_upgrade: true
+runcmd:
+    - touch /etc/cloud/cloud-init.disabled
+EOF
+    if [ $? -ne 0 ]; then
+        echo "Error writing ${TEMP_D}/user-data -- exiting."
+        exit 255
+    fi
 fi
 
 # write the config files to the vfat image
