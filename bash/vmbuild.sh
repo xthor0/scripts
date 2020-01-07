@@ -105,6 +105,8 @@ fi
 # static IPs don't work yet, but there has to be a way with virt-sysprep, or something
 if [ -n "${ipaddr}" ]; then
     echo "Static IPs don't work yet. Come back tomorrow."
+    # I'll bet I can use virt-customize or something like it to create /etc/sysconfig/network-scripts/ifcfg-eth0
+    # and stuff in the IP address assigned to it. Neat.
 fi
 
 # TODO: make this cmdline modular
@@ -113,6 +115,7 @@ if [ -z "${salt}" ]; then
     virt-sysprep -a ${HDD_IMG} --hostname ${vmname}.laptop.lab --ssh-inject root --root-password password:toor --selinux-relabel
 else
     virt-sysprep -a ${HDD_IMG} --hostname ${vmname}.laptop.lab --install curl --selinux-relabel --ssh-inject root --root-password password:toor --run-command 'curl -L https://bootstrap.saltstack.com -o /tmp/install_salt.sh && bash /tmp/install_salt.sh -P -X' --network
+    # see notes in update_centos7_cloudimg.sh about building VMs with updates
 fi
 
 if [ $? -ne 0 ]; then
