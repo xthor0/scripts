@@ -34,15 +34,14 @@ firstboot --disable
 # graphical
 text
 
-# TODO:
-# 1 - make openbox the default session for LXDM. (Or, find an LXDM alternative.) -- DONE
-# 2 - make ansibleprep auto-login so that the initial script runs automatically. -- DONE
-# 3 - figure out how to auto partition the drive, and even find the right drive (nvme0n1 vs sda, for example). -- IN PROGRESS
+## TODO: encryption!
+# my thoughts are: set a default password, and then make the user change it first thing
+# luks can remove the old password
 
 # automatically decide what disk to partition and how to use it
 %pre
 ROOTDRIVE=""
-for DEV in sda sdb sdc sdd nvme0n1; do
+for DEV in vda sda nvme0n1; do
   if [ -d /sys/block/${DEV} ]; then
     if [ $(cat /sys/block/${DEV}/removable) -eq 0 ]; then
       if [ -z ${ROOTDRIVE} ]; then
@@ -113,7 +112,9 @@ fi
 openbox
 ansible
 lxterminal
-slim
+lightdm-gtk
+tint2
+network-manager-applet
 %end
 
 # Post-installation Script
@@ -123,13 +124,21 @@ mkdir -p /home/ansibleprep/.config/openbox
 cat << EOF > /home/ansibleprep/.config/openbox/autostart
 #!/bin/bash
 
+tint2 &
+nm-applet &
+
 lxterminal -e "echo this is where ansible-playbook would run && read -n1 -s -r -p \"Press any key to continue. \""
 EOF
 
-echo default_user ansibleprep >> /etc/slim.conf
-echo auto_login yes >> /etc/slim.conf
-echo exec openbox-session > /home/ansibleprep/.xinitrc
-chown -R ansibleprep:ansibleprep /home/ansibleprep/.config /home/ansibleprep/.xinitrc
+# make lightdm auto-login once
+cat << EOF > /etc/lightdm/lightdm.conf.d/88-ansible-autologin.conf
+[SeatDefaults]
+autologin-user=ansibleprep
+autologin-user-timeout=0
+user-session=openbox-session
+EOF
+
+chown -R ansibleprep:ansibleprep /home/ansibleprep/.config 
 chmod 700 /home/ansibleprep/.config/openbox/autostart
 
 # FIN
