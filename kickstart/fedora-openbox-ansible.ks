@@ -132,10 +132,10 @@ EOF
 
 # make lightdm auto-login once
 cat << EOF > /etc/lightdm/lightdm.conf.d/88-ansible-autologin.conf
-[SeatDefaults]
+[Seat:*]
 autologin-user=ansibleprep
 autologin-user-timeout=0
-user-session=openbox-session
+user-session=openbox
 EOF
 
 chown -R ansibleprep:ansibleprep /home/ansibleprep/.config 
