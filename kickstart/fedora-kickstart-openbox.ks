@@ -63,7 +63,6 @@ expect
 ncdu
 pwgen
 vlc
-kernel-devel
 telegram-desktop
 fuse-exfat
 htop
@@ -105,10 +104,7 @@ mate-calc
 elfutils-libelf-devel
 podman-docker
 tlp
-slim
 lxterminal
-xautolock
-i3lock
 initial-setup-gui
 fontconfig-enhanced-defaults
 fontconfig-font-replacements
@@ -124,26 +120,26 @@ make
 perl
 numix-icon-theme
 pcmanfm
+firefox
+lightdm-gtk
+dunst
+light-locker
+plymouth-theme-hot-dog
+ansible
+bridge-utils
+libvirt
+virt-install
+qemu-kvm
+libguestfs-tools-c
+virt-viewer
+python3-boto
 %end
 
 # Post-installation Script
 #%post --erroronfail
 #exec < /dev/tty3 > /dev/tty3
 #chvt 3
-%post
-
-# install rpmfusion release packages
-dnf -y install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-31.noarch.rpm http://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-31.noarch.rpm
-
-# make sure better_fonts copr is enabled 
-dnf -y copr enable dawid/better_fonts
-
-# configure VirtualBox repo
-curl http://download.virtualbox.org/virtualbox/rpm/fedora/virtualbox.repo > /etc/yum.repos.d/virtualbox.repo
-
-# brave browser
-dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/
-rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
+%post --log=/root/kickstart-post.log
 
 # install nvidia drivers (this won't work outside of post)
 #dnf -y install akmod-nvidia
@@ -151,6 +147,70 @@ rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
 # the nvidia drivers from rpmfusion compile a driver IMMEDIATELY after installation
 # and it happens in the background - so, unless I hard-code a sleep or something, the
 # drivers aren't gonna work on reboot.
+
+### dnf/yum repo config
+# set up chrome repo
+cat << EOF | sudo tee /etc/yum.repos.d/google-chrome.repo
+[google-chrome]
+name=google-chrome
+baseurl=http://dl.google.com/linux/chrome/rpm/stable/x86_64
+enabled=1
+gpgcheck=1
+gpgkey=https://dl-ssl.google.com/linux/linux_signing_key.pub
+EOF
+
+# install rpmfusion release packages
+dnf -y install http://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-31.noarch.rpm http://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-31.noarch.rpm
+
+# make sure better_fonts copr is enabled 
+dnf -y copr enable dawid/better_fonts
+
+# brave browser
+dnf config-manager --add-repo https://brave-browser-rpm-release.s3.brave.com/x86_64/
+rpm --import https://brave-browser-rpm-release.s3.brave.com/brave-core.asc
+
+# spotify client
+dnf config-manager --add-repo=https://negativo17.org/repos/fedora-spotify.repo
+
+# vscode
+rpm --import https://packages.microsoft.com/keys/microsoft.asc
+sh -c 'echo -e "[code]\nname=Visual Studio Code\nbaseurl=https://packages.microsoft.com/yumrepos/vscode\nenabled=1\ngpgcheck=1\ngpgkey=https://packages.microsoft.com/keys/microsoft.asc" > /etc/yum.repos.d/vscode.repo'
+
+# pritunl
+tee /etc/yum.repos.d/pritunl.repo << EOF
+[pritunl]
+name=Pritunl Stable Repository
+baseurl=https://repo.pritunl.com/stable/yum/fedora/30/
+gpgcheck=1
+enabled=1
+EOF
+
+gpg --keyserver hkp://keyserver.ubuntu.com --recv-keys 7568D9BB55FF9E5287D586017AE645C0CF8E292A
+gpg --armor --export 7568D9BB55FF9E5287D586017AE645C0CF8E292A > key.tmp; sudo rpm --import key.tmp; rm -f key.tmp
+
+# slack
+dnf -y copr enable jdoss/slack-repo && dnf -y install slack-repo
+
+# kubectl
+cat << EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+EOF
+
+### end dnf/yum repo configs
+
+# set hotdog plymouth theme
+plymouth-set-default-theme hot-dog -R
+
+# install packages
+sudo dnf -y install awscli slack spotify-client google-chrome-stable
+
+### begin modify skel files
 
 echo "Setting up .skel files..."
 # without this, slim won't launch openbox
@@ -184,30 +244,6 @@ echo "sudo times out - and you may have to re-enter your password a few times."
 read -n1 -s -r -p "Press any key to continue. "
 echo
 
-
-# install Slack from flatpak
-echo "Configuring Flatpak..."
-sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-if [ \$? -eq 0 ]; then
-  echo "Installing Slack from flathub..."
-  flatpak install -y com.slack.Slack
-  if [ \$? -eq 0 ]; then
-    echo "Installing Spotify from flathub..."
-    sudo flatpak install -y com.spotify.Client
-  fi
-else
-  read -n1 -s -r -p "Flatpak configuration failed, consult the error message above and press a key to continue."
-fi
-
-# install brave
-echo "Installing Brave browser..."
-sudo dnf -y install brave-browser
-
-# install awscli (I get an error if I put it in the package list)
-sudo dnf -y install awscli
-
-echo "Upgrading all packages with dnf..."
-
 # upgrade all packages
 sudo dnf -y upgrade
 if [ \$? -ne 0 ]; then
@@ -228,7 +264,8 @@ fi
 
 # grab everything from Ben's github dotfiles repo and install the files
 echo "Installing dotfiles from https://github.com/xthor0/dotfiles.git -- please wait!"
-curl -LO https://api.github.com/repos/xthor0/dotfiles/tarball
+# remove /nav to get master branch (but after merge)
+curl -LO https://api.github.com/repos/xthor0/dotfiles/tarball/nav
 if [ \$? -eq 0 ]; then
   tar xf tarball && cd xthor0-dotfiles* && rsync -a . \${HOME}
   if [ \$? -eq 0 ]; then
@@ -245,7 +282,7 @@ fi
 popd
 
 # get chassis type
-chassistype=\$(hostnamectl status | grep Chassis | awk '{ print $2 }')
+chassistype=\$(hostnamectl status | grep Chassis | awk '{ print \$2 }')
 
 # set up SSH if we're a desktop, TLP if we're a laptop 
 if [ "\$chassistype" == "laptop" ]; then
@@ -256,40 +293,30 @@ else
   sudo systemctl enable sshd && sudo systemctl start sshd
 fi
 
-# if we're a VirtualBox guest, install these apps
-if [ "\${chassistype}" == "vm" ]; then
-  echo "Running as a VM, adjusting configuration..."
-
-  # no need to automatically lock the screen on a VM, we already have OS lock screens
-  echo "Removing xautolock..."
-  sed -i 's/^exec xautolock/\#exec xautolock/g' \${HOME}/.config/openbox/autostart
-
-  # virtualbox needs you to be a member of vboxsf if you want to use shared folders from the host
-  echo "Adding \$(whoami) to vboxsf group..."
-  sudo usermod -aG vboxsf \$(whoami)
-  retval=\$?
-else
-  # if we're bare metal, install VirtualBox hypervisor
-  echo "Installing VirtualBox-6.0..."
-  curl https://raw.githubusercontent.com/gryf/vboxmanage-bash-completion/master/VBoxManage | tee -a \${HOME}/.bash_completion >& /dev/null
-  sudo dnf -y install VirtualBox-6.0
-  retval=\$?
-  
-  # virtualbox needs you to be a member of vboxusers if you have a prayer of using USB
-  echo "Adding \$(whoami) to vboxusers group..."
-  sudo usermod -aG vboxusers \$(whoami)
+echo "Install Zoom?"
+read -p "(Y/N): " -n1 -r
+if [[ ! \$REPLY =~ ^[Yy]\$ ]]; then
+  sudo dnf -y install https://zoom.us/client/latest/zoom_x86_64.rpm
 fi
 
-# did it all go off without a hitch?
-if [ \${retval} -ne 0 ]; then
-  echo "Error installing packages - review output above. Exiting."
-  exit 255
+echo "Install Keybase?"
+read -p "(Y/N): " -n1 -r
+if [[ ! \$REPLY =~ ^[Yy]\$ ]]; then
+  sudo dnf -y install https://prerelease.keybase.io/keybase_amd64.rpm
+fi
+
+echo "Install Pritunl client?"
+read -p "(Y/N): " -n1 -r
+if [[ ! \$REPLY =~ ^[Yy]\$ ]]; then
+  sudo dnf -y install pritunl-client-electron
 fi
 
 read -n1 -s -r -p "Press any key to reboot!"
 sudo reboot
 EOF
 chmod 700 /etc/skel/.fedcrunch-setup
+
+### end modify skel files
 
 #chvt 1
 
