@@ -1,13 +1,14 @@
 # Configure installation method
 install
 url --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=fedora-31&arch=x86_64"
-repo --name=fedora-updates --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f31&arch=x86_64" --cost=0
+# why does this break wifi?
+# repo --name=fedora-updates --mirrorlist="https://mirrors.fedoraproject.org/mirrorlist?repo=updates-released-f31&arch=x86_64" --cost=0
 
 # Configure Firewall
 firewall --disabled
 
 # Configure Network Interfaces
-# network --onboot=yes --bootproto=dhcp --hostname=fedcrunch
+network --onboot=yes --bootproto=dhcp --hostname=fedcrunch
 
 # Configure Keyboard Layouts
 keyboard us
@@ -24,8 +25,8 @@ timezone America/Denver
 # lock root user
 rootpw --lock
 
-# add a user, with root, that will be deleted by Ansible
-user --groups=wheel --name=ansibleprep --password=p@ssw0rd --uid=9999 --gid=9999
+# this user has root privs and should have the password changed on first boot
+user --groups=wheel --name=xthor --password=p@ssw0rd
 
 # ansible creates user accounts, so we don't need firstboot
 firstboot --disable
@@ -33,10 +34,6 @@ firstboot --disable
 # launch graphical install - makes network selection and disk partitioning easier
 # graphical
 text
-
-## TODO: encryption!
-# my thoughts are: set a default password, and then make the user change it first thing
-# luks can remove the old password
 
 # automatically decide what disk to partition and how to use it
 %pre
@@ -53,7 +50,6 @@ for DEV in vda sda nvme0n1; do
   fi
 done
 
-
 chassistype=$(hostnamectl status | grep Chassis | awk '{ print $2 }')
 if [ "${chassistype}" == "vm" ]; then
   swapsetup="--size=1024"
@@ -63,39 +59,28 @@ else
   swapsetup="--recommended"
 fi
 
-MEMTOTAL=$(grep ^MemTotal /proc/meminfo | awk '{ print $2 }')
-MEMGB=$(expr ${MEMTOTAL} / 1024 / 1024)
-
-if [ ${MEMGB} -ge 8 ]; then
-  SWAP=8
-else
-  SWAP=$(expr ${MEMGB} / 2)
-fi
-
-if [ ${SIZEGB} -le 50 ]; then
-  cat << EOF > /tmp/part-include
+cat << EOF > /tmp/part-include
 clearpart --all --drives=$ROOTDRIVE --initlabel
 ignoredisk --only-use=$ROOTDRIVE
-part /boot/efi --fstype=efi --grow --maxsize=200 --size=20
-part /boot --fstype=xfs --ondisk=$ROOTDRIVE --size=1000
-part pv.2 --ondisk=$ROOTDRIVE --size=1 --grow
-volgroup vg0 pv.2
-logvol swap  --fstype="swap" ${swapsetup} --name=lv_swap --vgname=vg0
-logvol /  --fstype="xfs" --size=5 --name=root --vgname=vg0 --grow
 EOF
-else
-  cat << EOF > /tmp/part-include
-clearpart --all --drives=$ROOTDRIVE --initlabel
-ignoredisk --only-use=$ROOTDRIVE
-part /boot/efi --fstype=efi --grow --maxsize=200 --size=20
-part /boot --fstype=xfs --ondisk=$ROOTDRIVE --size=1000
-part pv.2 --fstype=lvmpv --ondisk=$ROOTDRIVE --size=1 --grow --encrypted --backuppassphrase
-volgroup vg0 --pesize=4096 pv.2
-logvol swap  --fstype="swap" ${swapsetup} --name=lv_swap --vgname=vg0
-logvol /  --fstype="xfs" --size=51200 --name=root --vgname=vg0
-logvol /home  --fstype="xfs" --size=5 --name=home --vgname=vg0 --grow
-EOF
+
+if [ -d /sys/firmware/efi ]; then
+  echo "part /boot/efi --fstype=efi --size=1024" >> /tmp/part-include
 fi
+
+cat << EOF | tee -a /tmp/part-include
+part /boot --fstype=xfs --ondisk=$ROOTDRIVE --size=1000
+part pv.3 --fstype=lvmpv --ondisk=$ROOTDRIVE --size=1 --grow
+volgroup vg0 pv.3
+logvol swap  --fstype="swap" ${swapsetup} --name=lv_swap --vgname=vg0
+EOF
+
+if [ "${chassistype}" != "vm" ]; then
+  echo "logvol /  --fstype=xfs --size=5 --name=root --vgname=vg0 --grow --encrypted" >> /tmp/part-include
+else
+  echo "logvol /  --fstype=xfs --size=5 --name=root --vgname=vg0 --grow" >> /tmp/part-include
+fi
+
 %end
 
 # include for disk partitioning - stolen from https://www.redhat.com/archives/kickstart-list/2012-October/msg00014.html
@@ -120,8 +105,8 @@ network-manager-applet
 # Post-installation Script
 %post
 
-mkdir -p /home/ansibleprep/.config/openbox
-cat << EOF > /home/ansibleprep/.config/openbox/autostart
+mkdir -p /home/xthor/.config/openbox
+cat << EOF > /home/xthor/.config/openbox/autostart
 #!/bin/bash
 
 tint2 &
@@ -131,15 +116,16 @@ lxterminal -e "echo this is where ansible-playbook would run && read -n1 -s -r -
 EOF
 
 # make lightdm auto-login once
-cat << EOF > /etc/lightdm/lightdm.conf.d/88-ansible-autologin.conf
+cat << EOF > /etc/lightdm/lightdm.conf.d/88-xthor-autologin.conf
+# this should be removed by ansible after configuration!
 [Seat:*]
-autologin-user=ansibleprep
+autologin-user=xthor
 autologin-user-timeout=0
 user-session=openbox
 EOF
 
-chown -R ansibleprep:ansibleprep /home/ansibleprep/.config 
-chmod 700 /home/ansibleprep/.config/openbox/autostart
+chown -R xthor:xthor /home/xthor/.config 
+chmod 700 /home/xthor/.config/openbox/autostart
 
 # FIN
 %end

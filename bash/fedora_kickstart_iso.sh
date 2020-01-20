@@ -5,27 +5,29 @@ function usage() {
     echo "`basename $0`: Build Fedora 31 Kickstart ISO."
     echo "Usage:
 
-`basename $0` -k <path to source kickstart> -f <output iso>"
+`basename $0` -k <path to source kickstart> -f <output iso> [ -n <vmname> ]"
     exit 255
 }
 
 
 iso_src="http://mirrors.xmission.com/fedora/linux/releases/31/Server/x86_64/iso/Fedora-Server-netinst-x86_64-31-1.9.iso"
+# iso_src="http://mirrors.xmission.com/fedora/linux/releases/30/Server/x86_64/iso/Fedora-Server-netinst-x86_64-30-1.2.iso"
 checksum="http://mirrors.xmission.com/fedora/linux/releases/31/Server/x86_64/iso/Fedora-Server-31-1.9-x86_64-CHECKSUM"
+# checksum="http://mirrors.xmission.com/fedora/linux/releases/30/Server/x86_64/iso/Fedora-Server-30-1.2-x86_64-CHECKSUM"
 
 tempdir=${HOME}/tmp/fedora-kickstart
 
 iso_filename=$(basename ${iso_src})
 
 # we need command-line options
-while getopts "k:f:v" opt; do
+while getopts "k:f:n:" opt; do
 	case $opt in
 		k)
-			ks=$OPTARG
-			;;
+			ks=${OPTARG} ;;
 		f)
-			outfile=$OPTARG
-			;;
+			outfile=${OPTARG} ;;
+    n)
+      vmname=${OPTARG} ;;
 	esac
 done
 
@@ -136,7 +138,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # make the ISO
-mkisofs -o ${outfile} -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -V Fedora-31-Kickstart -boot-load-size 4 -boot-info-table -R -J -v -T extract
+mkisofs -o ${outfile} -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -V Fedora-31-Kickstart -boot-load-size 4 -boot-info-table -R -J -v -T -eltorito-alt-boot -e images/efiboot.img -no-emul-boot extract
 if [ $? -ne 0 ]; then
     echo "error running mkisofs, exiting."
     exit 255
@@ -156,7 +158,25 @@ ls -l ${outfile}
 # clean up
 rm -rf extract
 
-# create a VM and boot to it - this will fail if one already exists
-virt-install --virt-type=kvm --name fedora-31-kickstart --ram 2048 --vcpus 2 --os-variant=fedora31 --network=bridge=virbr0,model=virtio --graphics vnc --disk path=${HOME}/vms/fedora-31-kickstart.qcow2,cache=writeback,size=20 --cdrom ${outfile} --noautoconsole
+# if argument to build a VM is passed, do it
+if [ -n "${vmname}" ]; then
+  # make sure it doesn't already exist
+  virsh list --all --name | grep -qw ${vmname}
+  if [ $? -eq 0 ]; then
+    echo "A VM named ${vmname} already exists -- exiting!"
+    exit 255
+  fi
+
+  # create a VM and boot to it - this will fail if one already exists
+  virt-install --virt-type=kvm --name ${vmname} --ram 2048 --vcpus 2 --os-variant=fedora31 --boot uefi --network=bridge=virbr0,model=virtio --graphics vnc --disk path=${HOME}/vms/${vmname}.qcow2,cache=writeback,size=40 --cdrom ${outfile} --noautoconsole
+
+  if [ $? -eq 0 ]; then
+    # connect to it using remote-viewer
+    vncport=$(virsh dumpxml ${vmname} | grep vnc | awk '{ print $3 }' | cut -d \' -f 2)
+    remote-viewer vnc://localhost:${vncport} &
+  else
+    echo "Error building VM!"
+  fi
+fi
 
 exit 0
