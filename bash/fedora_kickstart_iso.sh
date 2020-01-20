@@ -99,7 +99,7 @@ search --no-floppy --set=root -l 'Fedora-31-Kickstart'
 
 ### BEGIN /etc/grub.d/10_linux ###
 menuentry 'Install Fedora 31 via Kickstart' --class fedora --class gnu-linux --class gnu --class os {
-	linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=Fedora-31-Kickstart quiet inst.ks=hd:LABEL=Fedora-31-Kickstart:/ks.cfg
+	linuxefi /images/pxeboot/vmlinuz inst.stage2=hd:LABEL=F31KS quiet inst.ks=hd:LABEL=F31KS:/ks.cfg
 	initrdefi /images/pxeboot/initrd.img
 }
 EOF
@@ -123,7 +123,7 @@ SAY Installation will begin in 20 seconds...
 label linux
   menu label ^Install Fedora 31 via Kickstart
   kernel vmlinuz
-  append initrd=initrd.img inst.stage2=hd:LABEL=Fedora-31-Kickstart quiet inst.ks=hd:LABEL=Fedora-31-Kickstart:/ks.cfg
+  append initrd=initrd.img inst.stage2=hd:LABEL=F31KS quiet inst.ks=hd:LABEL=F31KS:/ks.cfg
 EOF
 if [ $? -ne 0 ]; then
     echo "error writing extract/isolinux/isolinux.cfg"
@@ -138,7 +138,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # make the ISO
-mkisofs -o ${outfile} -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -V Fedora-31-Kickstart -boot-load-size 4 -boot-info-table -R -J -v -T -eltorito-alt-boot -e images/efiboot.img -no-emul-boot extract
+mkisofs -U -A F31KS -V F31KS -volset F31KS -r -v -T -o ${outfile} -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -eltorito-alt-boot -e images/efiboot.img -no-emul-boot extract
 if [ $? -ne 0 ]; then
     echo "error running mkisofs, exiting."
     exit 255
