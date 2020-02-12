@@ -34,6 +34,11 @@ docroot=/var/www/lighttpd/ci
 cidata="${docroot}/${vmname}"
 
 # clone the image
+if [ -f ${dstimg} ]; then
+  echo "${dstimg} already exists. Exiting."
+  exit 255
+fi
+
 echo "Copying ${srcimg} to ${dstimg}..."
 cp ${srcimg} ${dstimg}
 if [ $? -eq 0 ]; then
