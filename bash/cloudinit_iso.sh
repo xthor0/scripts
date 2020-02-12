@@ -18,6 +18,11 @@ while getopts "n:i:" OPTION; do
     esac
 done
 
+# make sure we got an argument
+if [ -z "${vmname}" ]; then
+  usage
+fi
+
 gateway=10.200.106.1
 
 # http root
