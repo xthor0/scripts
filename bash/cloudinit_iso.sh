@@ -91,4 +91,4 @@ if [ $? -eq 0 ]; then
 fi
 
 # build the vm
-virt-install --virt-type=kvm --name ${vmname} --ram 2048 --vcpus 1 --os-variant=rhel-atomic-7.4 --network=bridge=br-vlan06,model=virtio --graphics vnc --disk /var/lib/libvirt/images/${vmname}.qcow2c,cache=writeback --import --noautoconsole --sysinfo smbios,type=1,serial=ds=nocloud-net;s=http://10.200.106.12/${vmname}/
+virt-install --virt-type=kvm --name ${vmname} --ram 2048 --vcpus 1 --os-variant=rhel-atomic-7.4 --network=bridge=br-vlan06,model=virtio --graphics vnc --disk /var/lib/libvirt/images/${vmname}.qcow2,cache=writeback --import --noautoconsole --sysinfo smbios,type=1,serial=ds=nocloud-net;s=http://10.200.106.12/${vmname}/
