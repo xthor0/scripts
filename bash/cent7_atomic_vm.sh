@@ -62,17 +62,23 @@ if [ $? -ne 0 ]; then
   exit 255
 fi
 
-if [ -n "${ipaddr}" ]; then
-  cat << EOF > ${cidata}/meta-data
+cat << EOF > ${cidata}/meta-data
 instance-id: 1
 local-hostname: ${vmname}.xthorsworld.com
-
 EOF
-else
-  # meta-data is where the hostname gets set
-  cat << EOF > ${cidata}/meta-data
-instance-id: 1
-local-hostname: ${vmname}.xthorsworld.com
+if [ $? -ne 0 ]; then
+    echo "Error writing ${cidata}/meta-data -- exiting."
+    exit 255
+fi
+
+# network-config is only necessary if we're setting a static IP address
+if [ -n "${ipaddr}" ]; then
+  cat << EOF > ${cidata}/network-config
+## /network-config on NoCloud cidata disk
+## version 1 format
+## version 2 is completely different, see the docs
+## version 2 is not supported by Fedora
+---
 version: 1
 config:
 - type: physical
@@ -85,11 +91,6 @@ config:
       - ${gateway}
 EOF
 fi
-if [ $? -ne 0 ]; then
-    echo "Error writing ${cidata}/meta-data -- exiting."
-    exit 255
-fi
-
 
 # password is: toor
 cat << EOF > ${cidata}/user-data
@@ -114,6 +115,10 @@ truncate --size 2M ${ciimg}
 mkfs.vfat -n cidata ${ciimg}
 mcopy -oi ${ciimg} ${cidata}/user-data ${cidata}/meta-data ::
 
+if [ -n "${ipaddr}" ]; then
+  mcopy -oi ${ciimg} ${cidata}/network-config ::
+fi
+
 # make sure the VM doesn't already exist (though, it should have died earlier when creating the cidata dir)
 virsh list --all --name | grep -qw ${vmname}
 if [ $? -eq 0 ]; then
@@ -123,3 +128,8 @@ fi
 
 # build the vm
 virt-install --virt-type=kvm --name ${vmname} --ram 2048 --vcpus 1 --os-variant=rhel-atomic-7.4 --network=bridge=br-vlan06,model=virtio --graphics vnc --disk ${dstimg},cache=writeback --disk=${ciimg} --import --noautoconsole
+
+# kill the temp dir
+rm -rf ${cidata}
+
+# end
