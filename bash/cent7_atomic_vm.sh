@@ -25,9 +25,25 @@ fi
 
 gateway=10.200.106.1
 
+# image source
+srcimg=/home/xthor/cloudimage/CentOS-Atomic-Host-7.1910-GenericCloud.qcow2
+
 # http root
 docroot=/var/www/lighttpd/ci
 cidata="${docroot}/${vmname}"
+
+# clone the image
+cp ${srcimg} /var/lib/libvirt/images/${vmname}.qcow2
+if [ $? -eq 0 ]; then
+  qemu-img resize /var/lib/libvirt/images/${vmname}.qcow2 +10G
+  if [ $? -ne 0 ]; then
+    echo "Error resizing ${vmname}.qcow2 -- exiting."
+    exit 255
+  fi
+else
+  echo "Error copying ${srcimg} -- exiting."
+  exit 255
+fi
 
 # create dir for ci data
 mkdir ${cidata}
@@ -91,4 +107,4 @@ if [ $? -eq 0 ]; then
 fi
 
 # build the vm
-virt-install --virt-type=kvm --name ${vmname} --ram 2048 --vcpus 1 --os-variant=rhel-atomic-7.4 --network=bridge=br-vlan06,model=virtio --graphics vnc --disk /var/lib/libvirt/images/${vmname}.qcow2,cache=writeback --import --noautoconsole --sysinfo type=smbios,system_serial=ds=nocloud-net;s=http://10.200.106.12/${vmname}/
+virt-install --virt-type=kvm --name ${vmname} --ram 2048 --vcpus 1 --os-variant=rhel-atomic-7.4 --network=bridge=br-vlan06,model=virtio --graphics vnc --disk /var/lib/libvirt/images/${vmname}.qcow2,cache=writeback --import --noautoconsole --sysinfo type=smbios,type=1,serial=ds=nocloud-net;s=http://10.200.106.12/${vmname}/
