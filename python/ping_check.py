@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 
 import time
-import pprint
-from datetime import datetime
-import httplib
-import urllib
-from platform import system as system_name  # Returns the system/OS name
-from subprocess import call as system_call  # Execute a shell command
 import subprocess
 import argparse
 import logging
@@ -96,35 +90,6 @@ while True:
   # sleep
   time.sleep(args.sleep)
 
-
-# commented, may use later
-"""
-# calculate time spent running
-time_elapsed = datetime.now() - start_time
-
-# print('Time elapsed (hh:mm:ss.ms) {}'.format(time_elapsed))
-msg_time_elapsed = 'Host {} is down! Time elapsed (hh:mm:ss.ms) {}'.format(args.host, time_elapsed)
-
-print(msg_time_elapsed)
-
-print("Sending pushover message...")
-
-# send a pushover message
-if args.usertoken is not None:
-    if args.apptoken is not None:
-        conn = httplib.HTTPSConnection("api.pushover.net:443")
-        conn.request("POST", "/1/messages.json",
-          urllib.urlencode({
-            "token": args.apptoken,
-            "user": args.usertoken,
-            "message": msg_time_elapsed,
-          }), { "Content-type": "application/x-www-form-urlencoded" })
-        conn.getresponse()
-    else:
-        print("Pushover API tokens not supplied - no message will be sent!")
-else:
-    print("Pushover API tokens not supplied - no message will be sent!")
-"""
 
 # die
 exit(0)
