@@ -19,8 +19,6 @@ ips = check_output(['hostname', '--all-ip-addresses'])
 # construct message
 message = "{} booted up at {} with IP {}".format(socket.gethostname(), datetime.now(), ips)
 
-print(message)
-
 # send a pushover message
 if args.usertoken is not None:
     if args.apptoken is not None:
