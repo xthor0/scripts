@@ -48,9 +48,9 @@ while True:
     if counter == 0:
         print(
             "{:20} || {:7} || {:15} || {:15} || {:15}".format('Datestamp', 'Counter', 'Packets Sent', 'Packets Received', 'Packet Loss Pct'))
-        print("-=-=" * 22)
+        print("-=-=" * 23)
 
-    print("{:20} || {:7.0f} || {:15.0f} || {:16.0f} || {:15.2%}".format(str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+    print("{:20} || {:7.0f} || {:15.0f} || {:16.0f} || {:15.1f}%".format(str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
                                                                         counter, output['packet_transmit'],
                                                                 output['packet_receive'], output['packet_loss_rate']))
 
