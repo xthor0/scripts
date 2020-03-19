@@ -35,7 +35,7 @@ args = parser.parse_args()
 print("Ping loop starting. Pinging {} (sending {} packets)...".format(args.host, args.count))
 
 # let's get pinging
-counter = 0
+counter = 1
 while True:
     ping_parser = pingparsing.PingParsing()
     transmitter = pingparsing.PingTransmitter()
@@ -47,12 +47,12 @@ while True:
 
     if counter == 0:
         print(
-            "{:20} || {:7} || {:15} || {:15} || {:15}".format('Datestamp', 'Counter', 'Packets Sent', 'Packets Received', 'Packet Loss Pct'))
-        print("-=-=" * 23)
+            "{:20} || {:7} || {:15} || {:15} || {:8} || {:8} || {:15}".format('Datestamp', 'Counter', 'Packets Sent', 'Packets Received', 'RTT Avg', 'RTT Max', 'Packet Loss Pct'))
+        print("-=-=" * 29)
 
-    print("{:20} || {:7.0f} || {:15.0f} || {:16.0f} || {:15.1f}%".format(str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+    print("{:20} || {:7.0f} || {:15.0f} || {:16.0f} || {:8.2f} || {:8.2f} || {:15.1f}%".format(str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
                                                                         counter, output['packet_transmit'],
-                                                                output['packet_receive'], output['packet_loss_rate']))
+                                                                output['packet_receive'], output['rtt_avg'], output['rtt_max'], output['packet_loss_rate']))
 
     # increment counter and sleep
     counter = counter+1
