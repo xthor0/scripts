@@ -45,7 +45,7 @@ while True:
 
     output = ping_parser.parse(result).as_dict()
 
-    if counter == 0:
+    if counter == 1:
         print(
             "{:20} || {:7} || {:15} || {:15} || {:8} || {:8} || {:15}".format('Datestamp', 'Counter', 'Packets Sent', 'Packets Received', 'RTT Avg', 'RTT Max', 'Packet Loss Pct'))
         print("-=-=" * 29)
