@@ -35,7 +35,6 @@ args = parser.parse_args()
 print("Ping loop starting. Pinging {} (sending {} packets)...".format(args.host, args.count))
 
 # let's get pinging
-counter = 1
 while True:
     ping_parser = pingparsing.PingParsing()
     transmitter = pingparsing.PingTransmitter()
@@ -45,7 +44,10 @@ while True:
 
     output = ping_parser.parse(result).as_dict()
 
-    if counter == 1:
+    try:
+        counter
+    except NameError:
+        counter = 1
         print(
             "{:20} || {:7} || {:15} || {:15} || {:8} || {:8} || {:15}".format('Datestamp', 'Counter', 'Packets Sent', 'Packets Received', 'RTT Avg', 'RTT Max', 'Packet Loss Pct'))
         print("-=-=" * 29)
