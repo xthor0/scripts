@@ -12,7 +12,7 @@ email_sender = 'will@supercoolemail.com'
 email_recipients = ['ben@supercoolemail.com', 'aiden@supercoolemail.com', 'will@supercoolemail.com']
 body_recipients = ", ".join(email_recipients)
 mail_server = "secure.emailsrvr.com"
-email_password = "repose retool sauciness yonder strategic Ignition 99*"
+email_password = "enter the cute password here"
 
 # loop for all of time
 while True:
