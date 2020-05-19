@@ -34,15 +34,15 @@ https://stackoverflow.com/questions/7834656/create-log-file-in-powershell
 
 #>
 
-$msi = "LAPS.x64.msi"
-$smbserver = "labdc02"
-$share = "\\{0}\share" -f $smbserver
-$file = "{0}\{1}" -f $share,$msi
+$msi_64 = "LAPS.x64.msi"
+$msi_32 = "LAPS.x86.msi"
+$smbserver = "aiifs01"
+$share = "\\{0}\laps" -f $smbserver
 $logFile = "{0}\{1}" -f $PSScriptRoot,$env:COMPUTERNAME
-$remoteLogFile = '{0}\laps_logs\{1}.log' -f $share,$env:COMPUTERNAME
+$remoteLogFile = '{0}\logs\{1}.log' -f $share,$env:COMPUTERNAME
 
 # set this to 1 to disable all local accounts *OTHER* than Administrator
-$disableLocalAccounts = 1
+$disableLocalAccounts = 0
 
 Function LogWrite
 {
@@ -53,15 +53,26 @@ Function LogWrite
    Add-content $Logfile -value $logstring
 }
 
+# make some logging noise
+LogWrite "Begin"
+
+# Are we running on a 32-bit or 64-bit machine?
+$arch = (gwmi win32_operatingsystem | select osarchitecture).osarchitecture
+LogWrite "Running on arch $($arch)"
+if($arch -eq "64-bit") {
+	$file = "{0}\{1}" -f $share,$msi_64
+} else {
+	$file = "{0}\{1}" -f $share,$msi_32
+}
+
+LogWrite "We'll be installing MSI $($file)"
+
 $MSIArguments = @(
     "/i"
     ($file)
     "/quiet"
     "/norestart"
 )
-
-# make some logging noise
-LogWrite "Begin"
 
 # check for connectivity
 # this makes nearly a 2 hour wait
@@ -98,7 +109,7 @@ if ($localAdmin.Enabled) {
 }
 
 # I'd like to know what other accounts are enabled on this machine...
-$localAccounts = Get-LocalUser | Where-Object {$_.Enabled} | Where-Object {$_.Name -ne "Administrator"} 
+$localAccounts = Get-LocalUser | where {$_.Enabled} | where {$_.Name -ne "Administrator"} 
 if ($localAccounts.Count -eq 0) {
 	LogWrite "No local accounts are enabled on $($env:COMPUTERNAME)."
 } else {
@@ -129,4 +140,4 @@ if (Test-Path $fileToCheck -PathType leaf)
 LogWrite "End of script!"
 
 # what the hell, copy the log to the SMB server
-Copy-Item $logFile $remoteLogFile
+copy $logFile $remoteLogFile
