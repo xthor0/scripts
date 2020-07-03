@@ -11,12 +11,16 @@ import subprocess
 import re
 from sys import platform
 from datetime import datetime
+import logging
+from os.path import expanduser
 
 
 # trap CTRL-C for graceful exit
 def signal_handler(sig, frame):
     print('\nCTRL-C pressed, exiting...')
     # eventually, close the log output...
+    if(args.daemon):
+        logger.info("App stopped. CTRL-C pressed.")
     exit(0)
 
 # a function to return the SSID and BSSID
@@ -24,6 +28,7 @@ def get_wifi_info():
     if platform == 'linux' or platform == 'linux2':
         ssid = subprocess.getoutput('iwgetid -r')
         # this is an assumption - I should probably cobble something together to make this less presumptive
+        # it works on raspios, though, which is what I really care about
         bssid_output = subprocess.getoutput('iwconfig wlan0')
         lineArr = bssid_output.split('\n')
         for line in lineArr:
@@ -64,6 +69,21 @@ parser.add_argument('-s', '--sleep', help='time in seconds to wait between loops
 parser.add_argument('-d', '--daemon', help='Run in background (logging to file)', action='store_true')
 args = parser.parse_args()
 
+# logging config
+if(args.daemon):
+    # we log to $HOME
+    home = expanduser("~")
+    logfile = "{}/packetloss-{}.log".format(home,args.host)
+    logger = logging.getLogger('packetloss')
+    hdlr = logging.FileHandler(logfile)
+    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    hdlr.setFormatter(formatter)
+    logger.addHandler(hdlr)
+    logger.setLevel(logging.INFO)
+
+    # log app starting
+    logger.info('App started')
+
 # tell the user... something
 print("Ping loop starting. Pinging {} (sending {} packets)...".format(args.host, args.count))
 
@@ -89,6 +109,13 @@ while True:
     print("{:20} || {:7.0f} || {:30} || {:17} || {:5.0f} || {:5.0f} || {:7.2f} || {:7.2f} || {:5.2f}%".format(str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
                                                                         counter, wlaninfo['ssid'], wlaninfo['bssid'], output['packet_transmit'],
                                                                 output['packet_receive'], output['rtt_avg'], output['rtt_max'], output['packet_loss_rate']))
+    
+    # begin logging if configured
+    if(args.daemon):
+        logmsg = "{}: # {} :: SSID - {}, BSSID - {}, Sent: {}, Recd: {}, RTT Avg: {}, RTT Max: {}, Loss: {}".format(str(datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                                                                        counter, wlaninfo['ssid'], wlaninfo['bssid'], output['packet_transmit'],
+                                                                output['packet_receive'], output['rtt_avg'], output['rtt_max'], output['packet_loss_rate'])
+        logger.info(logmsg)
 
     # increment counter and sleep
     counter = counter+1
