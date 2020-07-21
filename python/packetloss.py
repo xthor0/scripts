@@ -31,11 +31,14 @@ def get_wifi_info():
         # it works on raspios, though, which is what I really care about
         bssid_output = subprocess.getoutput('iwconfig wlan0')
         lineArr = bssid_output.split('\n')
-        for line in lineArr:
-            search = re.search("Access Point:", line)
-            if(search):
-                found = line.split()
-                bssid = found[5]
+        if any("Not-Associated" in s for s in lineArr):
+          bssid = "Not-Associated"
+        else:
+          for line in lineArr:
+              search = re.search("Access Point:", line)
+              if(search):
+                  found = line.split()
+                  bssid = found[5]
         try:
             bssid
         except NameError:
