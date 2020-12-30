@@ -7,7 +7,7 @@ makemkvcon --progress=-stdout -r info dev:/dev/sr0 > $discinfo
 
 # get disc title
 title=$(cat $discinfo | grep '^DRV:0' | cut -d \, -f 6 | tr -d \")
-directory="/storage/rips/${title}"
+directory="~/videos/rips/${title}"
 
 # delete temp file
 rm -f $discinfo
