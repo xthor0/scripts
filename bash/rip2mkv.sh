@@ -36,7 +36,7 @@ fi
 pushd "${directory}"
 
 # save the discinfo file and then delete it (for debugging purposes)
-cp ${discinfo} discinfo.txt
+cp ${discinfo} "${HOME}/discinfo/${title}.txt"
 
 # begin ripping disk
 # cribbed this from here: https://gist.github.com/tacofumi/3041eac2f59da7a775c6
