@@ -36,7 +36,15 @@ fi
 pushd "${directory}"
 
 # save the discinfo file and then delete it (for debugging purposes)
-cp ${discinfo} "${HOME}/discinfo/${title}.txt"
+discinfo_backup="${HOME}/discinfo/${title}.txt"
+if [ -f "${discinfo_backup}" ]; then
+	discinfo_backup="${HOME}/discinfo/${title}-2.txt"
+	if [ -f "${discinfo_backup}" ]; then
+		echo "WTF, how many of this disc have you ripped?? I can't back up this discinfo."
+	fi
+fi
+
+cp ${discinfo} "${discinfo_backup}"
 
 # begin ripping disk
 # cribbed this from here: https://gist.github.com/tacofumi/3041eac2f59da7a775c6
