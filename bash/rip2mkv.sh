@@ -12,7 +12,7 @@ makemkvcon --progress=-stdout -r info dev:/dev/sr0 > $discinfo
 
 # get disc title
 title=$(cat $discinfo | grep '^DRV:0' | cut -d \, -f 6 | tr -d \")
-directory="${HOME}/videos/rips/${title}"
+directory="/storage/videos/rips/${title}"
 
 # if title is not set, exit
 if [ -z "$title" ]; then
