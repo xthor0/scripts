@@ -117,7 +117,7 @@ while [ -d /proc/${pid} ]; do
     filesize=$(du -k ${filename} | awk '{ print $1 }')
     if [ ${filesize} -eq ${filesize_last} ]; then
         let filesize_issue_count+=1
-        if [ ${filesize_issue_count} -eq ${filesize_issue_max} ]; then
+        if [ ${filesize_issue_count} -ge ${filesize_issue_max} ]; then
             message "Maximum wait reached for filesize not increasing, killing OpenRTSP and restarting."
             kill -s SIGHUP ${pid}
         else
