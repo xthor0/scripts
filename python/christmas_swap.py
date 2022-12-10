@@ -1,9 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import random
 import pprint
 
-participants = ['Amanda', 'Will', 'Dalton', 'Izzy', 'Aiden']
+participants = ['Autumn', 'Dalton', 'Izzy', 'Aiden']
 recipients = []
 
 for giver in participants:
