@@ -76,8 +76,14 @@ set -e
 # I store my templates starting at 9000 - get the next higest ID
 highest_id=$(qm list | awk '{ print $1 }' | grep -v ^VMID | grep -v ^1[0-9][0-9] | sort -n | tail -n1)
 
-# here's our ID
-vm_id=$((highest_id+1))
+# determine which VM ID we should use
+if [ -z "${highest_id}" ]; then
+  vm_id=9000
+else
+  vm_id=$((highest_id+1))
+fi
+
+echo "Creating VM with ID: ${vm_id}"
 
 # check storage arg
 pvesm list ${storage}
@@ -95,7 +101,7 @@ EOF
 # download the source disk
 axel -a ${dlurl}
 mv $(basename ${dlurl}) $(basename ${image})
-virt-sysprep -a ${image} --selinux-relabel --network --update --install qemu-guest-agent
+virt-sysprep -a ${image} --selinux-relabel --network --update --install qemu-guest-agent --operations -machine-id
 
 # create the VM
 qm create ${vm_id} --name ${vmname} --memory 2048 --net0 virtio,bridge=vmbr0,tag=54
