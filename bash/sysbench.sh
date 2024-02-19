@@ -16,7 +16,7 @@ echo "CPU Test (Multi-thread)"
 sysbench --threads=${nproc} cpu run | grep "events per second"
 echo
 echo "Memory Test (Single-thread)"
-sysbench memory run | egrep -Ei '(total operations|transferred)'
+sysbench memory run | grep -Ei '(total operations|transferred)'
 echo
 echo "Memory Test (Multi-thread)"
-sysbench --threads=${nproc} memory run | egrep -Ei '(total operations|transferred)'
+sysbench --threads=${nproc} memory run | grep -Ei '(total operations|transferred)'
