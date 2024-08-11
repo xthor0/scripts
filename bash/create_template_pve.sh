@@ -12,7 +12,7 @@ function usage() {
 }
 
 # check if tools required by this script are installed
-for x in virt-sysprep axel; do
+for x in axel; do
   which ${x} >& /dev/null 
   if [ $? -ne 0 ]; then
     echo "ERROR: Missing ${x} -- please install."
@@ -32,6 +32,7 @@ done
 # validate arguments
 if [[ -z ${flavor} || -z ${storage} ]]; then
   echo 'one or more variables are undefined'
+  usage
   exit 1
 fi
 
@@ -62,12 +63,19 @@ esac
 if [ ! -f /var/lib/vz/snippets/vendor.yaml ]; then
   echo "NOTICE!!! /var/lib/vz/snippets/vendor.yaml needs to exist on EVERY NODE!"
   echo "Please copy the file to other nodes after this script creates it."
-  cat < EOF > /var/lib/vz/snippets/vendor.yaml
+  cat << EOF > /var/lib/vz/snippets/vendor.yaml
 #cloud-config
 timezone: America/Denver
+packages:
+  - qemu-guest-agent
 runcmd:
-    - touch /etc/cloud/cloud-init.disabled
+  - touch /etc/cloud/cloud-init.disabled
+  - sleep 1 && reboot
 EOF
+  if [ $? -ne 0 ]; then
+    echo "Error creating vendor.yaml -- exiting."
+    exit 255
+  fi
 fi
 
 # immediately exit on any error (from here)
@@ -101,10 +109,10 @@ EOF
 # download the source disk
 axel -a ${dlurl}
 mv $(basename ${dlurl}) $(basename ${image})
-virt-sysprep -a ${image} --selinux-relabel --network --update --install qemu-guest-agent --operations -machine-id
+#virt-sysprep -a ${image} --selinux-relabel --network --update --install qemu-guest-agent --operations -machine-id
 
 # create the VM
-qm create ${vm_id} --name ${vmname} --memory 2048 --net0 virtio,bridge=vmbr0,tag=54
+qm create ${vm_id} --name ${vmname} --memory 2048 --net0 virtio,bridge=vmbr0,tag=54 --agent enabled=1
 
 # import the debian 12 qcow2 disk to VM created
 qm importdisk ${vm_id} ${image} ${storage}
