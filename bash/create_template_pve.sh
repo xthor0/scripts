@@ -48,6 +48,7 @@ case ${flavor} in
   bionic) image="${tmpdir}/bionic.qcow2"; dlurl="https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-amd64.img"; vmname=ubuntu1804-tmpl;;
   focal) image="${tmpdir}/focal.qcow2"; dlurl="https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64.img"; vmname=ubuntu2004-tmpl;;
   jammy) image="${tmpdir}/jammy.qcow2"; dlurl="https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"; vmname=ubuntu2204-tmpl;;
+  noble) image="${tmpdir}/noble.qcow2"; dlurl="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"; vmname=ubuntu2404-tmpl;;
   centos7) image="${tmpdir}/centos7.qcow2"; dlurl="https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2c"; vmname=centos7-tmpl;;
   alma8) image="${tmpdir}/almalinux8.qcow2"; dlurl="https://repo.almalinux.org/almalinux/8/cloud/x86_64/images/AlmaLinux-8-GenericCloud-latest.x86_64.qcow2"; vmname=almalinux8-tmpl;;
   alma9) image="${tmpdir}/almalinux9.qcow2"; dlurl="https://repo.almalinux.org/almalinux/9/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2"; vmname=almalinux9-tmpl;;
@@ -56,6 +57,7 @@ case ${flavor} in
   buster) image="${tmpdir}/buster.qcow2"; dlurl="https://cloud.debian.org/images/cloud/buster/latest/debian-10-generic-amd64.qcow2"; vmname=debian10-tmpl;;
   bullseye) image="${tmpdir}/bullseye.qcow2"; dlurl="https://cloud.debian.org/images/cloud/bullseye/latest/debian-11-generic-amd64.qcow2"; vmname=debian11-tmpl;;
   bookworm) image="${tmpdir}/bookworm.qcow2"; dlurl="https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2"; vmname=debian12-tmpl;;
+  f40) image="${tmpdir}/fedora40.qcow2"; dlurl="https://dl.fedoraproject.org/pub/fedora/linux/releases/40/Cloud/x86_64/images/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2"; vmname=fedora40-tmpl;;
   *) bad_taste;;
 esac
 
