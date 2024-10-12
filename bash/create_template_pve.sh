@@ -61,11 +61,12 @@ case ${flavor} in
   *) bad_taste;;
 esac
 
-# make sure /var/lib/vz/snippets/vendor.yaml exists
-if [ ! -f /var/lib/vz/snippets/vendor.yaml ]; then
-  echo "NOTICE!!! /var/lib/vz/snippets/vendor.yaml needs to exist on EVERY NODE!"
+snippets_dir="/mnt/pve/pavuk-pve/snippets"
+# make sure ${snippets_dir}/vendor.yaml exists
+if [ ! -f ${snippets_dir}/vendor.yaml ]; then
+  echo "NOTICE!!! ${snippets_dir}/vendor.yaml needs to exist on EVERY NODE!"
   echo "Please copy the file to other nodes after this script creates it."
-  cat << EOF > /var/lib/vz/snippets/vendor.yaml
+  cat << EOF > ${snippets_dir}/vendor.yaml
 #cloud-config
 timezone: America/Denver
 packages:
@@ -114,20 +115,20 @@ mv $(basename ${dlurl}) $(basename ${image})
 #virt-sysprep -a ${image} --selinux-relabel --network --update --install qemu-guest-agent --operations -machine-id
 
 # create the VM
-qm create ${vm_id} --name ${vmname} --memory 2048 --net0 virtio,bridge=vmbr0,tag=54 --agent enabled=1
+qm create ${vm_id} --name ${vmname} --memory 2048 --net0 virtio,bridge=vmbr0,tag=54 --agent enabled=1 --cpu x86-64-v2 --vga qxl
 
 # import the debian 12 qcow2 disk to VM created
 qm importdisk ${vm_id} ${image} ${storage}
 
 # attach disk
-qm set ${vm_id} --scsihw virtio-scsi-pci --scsi0 ${storage}:vm-${vm_id}-disk-0
+qm set ${vm_id} --scsihw virtio-scsi-pci --scsi0 ${storage}:${vm_id}/vm-${vm_id}-disk-0.raw
 
 # create ide for cloudinit
 qm set ${vm_id} --ide2 ${storage}:cloudinit
 
 # adjust boot settings, otherwise... won't work
 qm set ${vm_id} --boot c --bootdisk scsi0
-qm set ${vm_id} --serial0 socket --vga serial0
+#qm set ${vm_id} --serial0 socket --vga serial0
 qm set ${vm_id} --ipconfig0 ip=dhcp
 
 # make the template disk 10G instead of 2G
@@ -140,7 +141,7 @@ qm template ${vm_id}
 qm set ${vm_id} --ciuser xthor
 qm set ${vm_id} --cipassword p@ssw0rd
 qm set ${vm_id} --sshkeys sshkeys
-qm set ${vm_id} --cicustom "vendor=local:snippets/vendor.yaml"
+qm set ${vm_id} --cicustom "vendor=pavuk-pve:snippets/vendor.yaml"
 
 # cleanup
 rm -rf ${tmpdir}
