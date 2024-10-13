@@ -5,8 +5,6 @@
 Param (
     [Parameter (Mandatory = $true)]
     [string] $JumpCloudConnectKey
-    [Parameter (Mandatory = $true)]
-    [string] $ComputerName
 )
 
 #--- JumpCloud Stuff ------------------------------
@@ -67,11 +65,11 @@ Function RenameComputer() {
 }
 
 Function CheckComputerName() {
-  $env:COMPUTERNAME.StartsWith('DESKTOP-') {
+  if ($env:COMPUTERNAME.StartsWith('DESKTOP-')) {
     RenameComputer
   } else {
     Write-Host -NoNewLine 'PLEASE NOTE: This computer is named '
-    Write-Host -ForeGroundColor red $env.COMPUTERNAME
+    Write-Host -ForeGroundColor red $env:COMPUTERNAME
     Write-Host -ForeGroundColor green '*|*|*|*|*|*|*|*|*|*|*|*|*|*|*'
     Read-Host -Prompt 'Press press ENTER to proceed with installation - otherwise press CTRL-C and rename this computer.'
   }
