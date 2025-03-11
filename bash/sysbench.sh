@@ -5,7 +5,7 @@ if [ "$(uname -s)" == "Darwin" ]; then
 else
   # intel models can get the CPU this way
   nproc=$(nproc)
-  case "$(uname -p)" in
+  case "$(uname -m)" in
     "x86_64")
       cpu_model="$(grep ^model\ name /proc/cpuinfo  | head -n1 | cut -d \: -f 2 | cut -b 2-)"
       ;;
