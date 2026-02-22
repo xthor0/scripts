@@ -83,6 +83,7 @@ check_drive_strict() {
 
 run_stress_test() {
     DURATION="30m"
+    echo "performance" | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
     echo "Starting 30-Minute Burn-in (CPU + MEMORY + IO)..."
     
     # 1. Start Logging Temps in the background
