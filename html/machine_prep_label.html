@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Compact Prep Checklists</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+        }
+        /* Grid Layout: 3 columns */
+        .container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        .checklist-card {
+            border: 1.5px solid #000;
+            padding: 10px;
+            box-sizing: border-box;
+            page-break-inside: avoid;
+            background: #fff;
+        }
+        h2 {
+            margin: 0 0 8px 0;
+            text-align: center;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            border-bottom: 1.5px solid #000;
+        }
+        .spec-line {
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 4px;
+            font-size: 0.75em;
+            color: #333;
+        }
+        .tasks {
+            margin-top: 10px;
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Two columns for tasks to save vertical space */
+            gap: 4px;
+        }
+        .item {
+            display: flex;
+            align-items: center;
+            font-size: 0.7em;
+            font-weight: bold;
+        }
+        .checkbox {
+            width: 14px;
+            height: 14px;
+            border: 1px solid #000;
+            margin-right: 6px;
+            flex-shrink: 0;
+        }
+        .notes-area {
+            margin-top: 10px;
+            border-top: 1px dashed #000;
+            height: 40px;
+            font-size: 0.6em;
+            padding-top: 4px;
+            color: #666;
+        }
+        /* UI Elements */
+        .controls {
+            background: #222;
+            color: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        input {
+            width: 60px;
+            padding: 5px;
+            margin: 0 10px;
+        }
+        button {
+            padding: 6px 15px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        @media print {
+            .no-print { display: none; }
+            body { padding: 0; }
+            .container { gap: 5px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print controls">
+    <label>Quantity:</label>
+    <input type="number" id="qtyInput" value="9" min="1">
+    <button onclick="generate()">Update List</button>
+    <button onclick="window.print()">Print Now</button>
+</div>
+
+<div class="container" id="checklist-grid"></div>
+
+<script>
+    function generate() {
+        const count = document.getElementById('qtyInput').value;
+        const grid = document.getElementById('checklist-grid');
+        const template = `
+            <div class="checklist-card">
+                <h2>Prep Checklist</h2>
+                <div class="spec-line">S/N: ___________________</div>
+                <div class="spec-line">CPU: __________________</div>
+                <div class="spec-line">RAM: __________________</div>
+                <div class="spec-line">SSD: ___________________</div>
+                
+                <div class="tasks">
+                    <div class="item"><div class="checkbox"></div> Memtest</div>
+                    <div class="item"><div class="checkbox"></div> SmartCTL</div>
+                    <div class="item"><div class="checkbox"></div> Erase SSD</div>
+                    <div class="item"><div class="checkbox"></div> Stress</div>
+                    <div class="item"><div class="checkbox"></div> Windows</div>
+                    <div class="item"><div class="checkbox"></div> OOBE</div>
+                </div>
+
+                <div class="notes-area">NOTES:</div>
+            </div>
+        `;
+        
+        grid.innerHTML = '';
+        for (let i = 0; i < count; i++) {
+            grid.innerHTML += template;
+        }
+    }
+
+    // Initial run
+    generate();
+</script>
+
+</body>
+</html>
