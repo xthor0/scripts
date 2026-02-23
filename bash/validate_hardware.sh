@@ -102,10 +102,8 @@ run_stress_test() {
     TEMP_PID=$!
 
     # 2. Run the Stress Test
-    # --cpu 0: Use all cores
-    # --vm 2: Spin up 2 memory stressors (finds bad RAM faster than CPU alone)
-    # --io 2: Stress the I/O scheduler
-    stress-ng --cpu 0 --vm 2 --io 2 --timeout $DURATION --metrics-brief
+    stress-ng --cpu 0 --vm 2 --vm-bytes 70% --timeout ${DURATION} --metrics-brief
+    SNGEXIT=$?
 
     # 3. Analyze Results
     kill $TEMP_PID 2>/dev/null
@@ -114,7 +112,7 @@ run_stress_test() {
         echo -e "\e[41m\e[97m FAIL: Unit Overheated (>90C) during stress test! \e[0m"
         echo -e "\e[41m\e[97m Repaste Thermal Compound or Replace Fan. \e[0m"
         return 1
-    elif [ $? -eq 0 ]; then
+    elif [ ${SNGEXIT} -eq 0 ]; then
         echo -e "\e[42m\e[97m PASS: System survived 30m stress test stable. \e[0m"
         return 0
     else
