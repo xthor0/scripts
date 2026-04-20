@@ -13,6 +13,26 @@ FIO_TEMP_FILE = "testfile.tmp"
 FIO_JSON_FILE = "fio_results.json"
 GB_CPU_JSON = "gb_cpu.json"
 GB_GPU_JSON = "gb_gpu.json"
+FIO_NOCOW_DIR = ".fio_nocow"
+
+def setup_fio_target(filename):
+    if platform.system() != "Linux":
+        return filename
+    
+    try:
+        # Check if the current directory is on btrfs
+        fs_type = subprocess.check_output(["stat", "-f", "-c", "%T", "."], text=True).strip()
+        if fs_type == "btrfs":
+            print("  Detected btrfs, disabling CoW for FIO output...")
+            if not os.path.exists(FIO_NOCOW_DIR):
+                os.makedirs(FIO_NOCOW_DIR)
+                # +C disables CoW on btrfs. Must be set on empty dir/file.
+                subprocess.run(["chattr", "+C", FIO_NOCOW_DIR], check=True)
+            return os.path.join(FIO_NOCOW_DIR, filename)
+    except Exception as e:
+        print(f"  Warning: Could not configure NOCOW for btrfs: {e}")
+    
+    return filename
 
 def get_geekbench_path():
     system = platform.system()
@@ -137,6 +157,8 @@ def main():
         "fio": {}
     }
 
+    fio_target = setup_fio_target(FIO_TEMP_FILE)
+
     try:
         # --- Sysbench ---
         print("Running Sysbench benchmarks...")
@@ -171,7 +193,7 @@ def main():
         ioengine = "posixaio" if platform.system() == "Darwin" else "libaio"
         print("\nRunning FIO (AmorphousDiskMark style)...")
         fio_cmd = [
-            "fio", "--output-format=json", f"--filename={FIO_TEMP_FILE}", "--size=1G", "--runtime=30", 
+            "fio", "--output-format=json", f"--filename={fio_target}", "--size=1G", "--runtime=30", 
             "--direct=1", "--group_reporting", f"--ioengine={ioengine}",
             "--name=seq_q8t1_r", "--rw=read", "--bs=1M", "--iodepth=8",
             "--name=seq_q8t1_w", "--stonewall", "--rw=write", "--bs=1M", "--iodepth=8",
@@ -213,9 +235,11 @@ def main():
 
     finally:
         # Cleanup
-        for f in [FIO_TEMP_FILE, FIO_JSON_FILE, GB_CPU_JSON, GB_GPU_JSON]:
+        for f in [fio_target, FIO_JSON_FILE, GB_CPU_JSON, GB_GPU_JSON]:
             if os.path.exists(f):
                 os.remove(f)
+        if os.path.exists(FIO_NOCOW_DIR):
+            shutil.rmtree(FIO_NOCOW_DIR)
 
 if __name__ == "__main__":
     main()
