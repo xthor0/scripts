@@ -239,8 +239,15 @@ def summary_compile(results):
 
 # ---------------------------------------------------------------- ffmpeg
 
+FFMPEG_REQUIRED_ENCODERS = ("libx264", "libx265")
+
 def ffmpeg_deps():
-    return [] if shutil.which("ffmpeg") else ["ffmpeg"]
+    if not shutil.which("ffmpeg"):
+        return ["ffmpeg"]
+    # Distro builds (e.g. Fedora's ffmpeg-free) can lack the software encoders this suite measures
+    out = run_command(["ffmpeg", "-hide_banner", "-encoders"]) or ""
+    available = set(re.findall(r"^\s*V\S*\s+(\S+)", out, re.M))
+    return [] if all(e in available for e in FFMPEG_REQUIRED_ENCODERS) else ["ffmpeg-codecs"]
 
 def time_command(cmd):
     start = time.monotonic()
@@ -466,6 +473,8 @@ HINTS = {
     "podman-running": "podman is installed but not responding (macOS: `podman machine init` "
                       "then `podman machine start`)",
     "compiler": "C compiler and make (macOS: run `xcode-select --install`)",
+    "ffmpeg-codecs": "ffmpeg is installed but lacks libx264 and/or libx265 (Fedora/RHEL: enable RPM Fusion, "
+                     "then `sudo dnf swap ffmpeg-free ffmpeg --allowerasing`)",
 }
 
 INSTALL_COMMANDS = {
