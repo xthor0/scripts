@@ -594,10 +594,15 @@ SUITES = {
     "podman":    (podman_deps,    run_podman,    summary_podman),
 }
 
+# Suites that only run when explicitly requested (--only or --with)
+OPT_IN = {"geekbench"}
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Cross-platform (macOS/Linux) system benchmarks.")
     parser.add_argument("--only", metavar="SUITE[,SUITE]", help="run only these suites (comma-separated)")
-    parser.add_argument("--skip", metavar="SUITE[,SUITE]", help="run everything except these suites")
+    parser.add_argument("--skip", metavar="SUITE[,SUITE]", help="run the default suites except these")
+    parser.add_argument("--with", dest="with_", metavar="SUITE[,SUITE]",
+                        help=f"also run opt-in suites ({', '.join(sorted(OPT_IN))})")
     parser.add_argument("--list", action="store_true", help="list available suites and exit")
     parser.add_argument("--output-dir", default="results", metavar="DIR",
                         help="where to save the JSON results file (default: ./results)")
@@ -608,14 +613,15 @@ def parse_args():
     group.add_argument("--no-install", action="store_true", help="never offer to install missing dependencies")
     args = parser.parse_args()
     if args.list:
-        print("\n".join(SUITES))
+        print("\n".join(f"{s}{' (opt-in)' if s in OPT_IN else ''}" for s in SUITES))
         sys.exit(0)
     split = lambda s: [x.strip() for x in s.split(",") if x.strip()] if s else []
-    only, skip = split(args.only), split(args.skip)
-    unknown = [s for s in only + skip if s not in SUITES]
+    only, skip, extra = split(args.only), split(args.skip), split(args.with_)
+    unknown = [s for s in only + skip + extra if s not in SUITES]
     if unknown:
         parser.error(f"unknown suite(s): {', '.join(unknown)} (choose from: {', '.join(SUITES)})")
-    selected = [s for s in SUITES if (not only or s in only) and s not in skip]
+    base = only if only else [s for s in SUITES if s not in OPT_IN]
+    selected = [s for s in SUITES if (s in base or s in extra) and s not in skip]
     if not selected:
         parser.error("no suites selected")
     install_mode = "always" if args.install else "never" if args.no_install else "ask"
