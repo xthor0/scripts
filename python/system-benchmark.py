@@ -7,6 +7,13 @@ import sys
 import platform
 import shutil
 import glob
+import argparse
+import hashlib
+import tarfile
+import urllib.request
+import statistics
+import tempfile
+import time
 
 # Configuration
 FIO_TEMP_FILE = "testfile.tmp"
@@ -14,6 +21,25 @@ FIO_JSON_FILE = "fio_results.json"
 GB_CPU_JSON = "gb_cpu.json"
 GB_GPU_JSON = "gb_gpu.json"
 FIO_NOCOW_DIR = ".fio_nocow"
+
+# ffmpeg: synthetic source so no sample file needs to be bundled or downloaded
+FFMPEG_SOURCE = "ffmpeg_source.mkv"
+FFMPEG_SECONDS = 10
+FFMPEG_FPS = 30
+
+# compile: CPython builds natively on macOS and Linux, so results are comparable across both
+CPYTHON_VERSION = "3.12.16"
+CPYTHON_URL = f"https://www.python.org/ftp/python/{CPYTHON_VERSION}/Python-{CPYTHON_VERSION}.tar.xz"
+# Computed from the tarball downloaded over HTTPS (not taken from a published hash)
+CPYTHON_SHA256 = "b5796915dc45ff745cfb4e990a7e7c93d6f546328a102ce31448d69ebc37575c"
+CACHE_DIR = os.path.expanduser("~/.cache/system-benchmark")
+
+# podman: tags are pinned for repeatability; bump deliberately
+PODMAN_IMAGE = "docker.io/library/alpine:3.20"
+PODMAN_PULL_IMAGE = "docker.io/library/python:3.12-slim"
+PODMAN_STARTUP_RUNS = 20
+PODMAN_BIND_FILES = 20000
+PODMAN_BUILD_TAG = "localhost/system-benchmark-build:tmp"
 
 def setup_fio_target(filename):
     if platform.system() != "Linux":
@@ -56,18 +82,6 @@ def get_geekbench_path():
     return shutil.which("geekbench6")
 
 GEEKBENCH_PATH = get_geekbench_path()
-
-def check_dependencies():
-    missing = []
-    for cmd in ['sysbench', 'fio']:
-        if not shutil.which(cmd):
-            missing.append(cmd)
-    if not GEEKBENCH_PATH or not os.path.exists(GEEKBENCH_PATH):
-        missing.append(f"Geekbench 6 (not found in path or standard directories)")
-    
-    if missing:
-        print(f"Error: Missing dependencies: {', '.join(missing)}")
-        sys.exit(1)
 
 def run_command(cmd, shell=False):
     try:
@@ -138,8 +152,415 @@ def get_system_info():
         pass
     return info
 
+# ---------------------------------------------------------------- 7zip
+
+def find_7z():
+    for cmd in ("7zz", "7z", "7za"):
+        if shutil.which(cmd):
+            return cmd
+    return None
+
+def sevenzip_deps():
+    return [] if find_7z() else ["7zip"]
+
+def run_7z_bench(extra):
+    out = run_command([find_7z(), "b", *extra])
+    if not out:
+        return "N/A"
+    match = re.search(r"^Tot:\s+(?:\d+\s+)+?(\d+)\s*$", out, re.M)
+    return match.group(1) if match else "N/A"
+
+def run_sevenzip(cores, results):
+    print("\nRunning 7-Zip benchmark...")
+    print("  Running 7z b (1 thread)...")
+    single = run_7z_bench(["-mmt1"])
+    print(f"  Running 7z b ({cores} threads)...")
+    multi = run_7z_bench([f"-mmt{cores}"])
+    results["7zip"] = {"single": single, "multi": multi}
+
+def summary_sevenzip(results):
+    print(f"7-Zip Single-Thread:          {results['7zip']['single']} MIPS")
+    print(f"7-Zip Multi-Thread:           {results['7zip']['multi']} MIPS")
+
+# ---------------------------------------------------------------- compile
+
+def compile_deps():
+    return [] if shutil.which("cc") and shutil.which("make") else ["compiler"]
+
+def fetch_cpython():
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    path = os.path.join(CACHE_DIR, os.path.basename(CPYTHON_URL))
+    def verified():
+        if not os.path.exists(path):
+            return False
+        with open(path, "rb") as f:
+            return hashlib.file_digest(f, "sha256").hexdigest() == CPYTHON_SHA256
+    if not verified():
+        print(f"  Downloading CPython {CPYTHON_VERSION}...")
+        urllib.request.urlretrieve(CPYTHON_URL, path)
+        if not verified():
+            os.remove(path)
+            raise RuntimeError("CPython tarball checksum mismatch")
+    return path
+
+def run_compile(cores, results):
+    r = results["compile"] = {}
+    print(f"\nRunning CPython {CPYTHON_VERSION} compile...")
+    try:
+        tarball = fetch_cpython()
+    except Exception as e:
+        print(f"  Error fetching CPython source: {e}")
+        return
+    with tempfile.TemporaryDirectory(dir=os.getcwd()) as build_dir:
+        with tarfile.open(tarball) as tar:
+            tar.extractall(build_dir)
+        src = os.path.join(build_dir, f"Python-{CPYTHON_VERSION}")
+        print("  ./configure (serial)...")
+        start = time.monotonic()
+        if subprocess.run(["./configure", "-q"], cwd=src, capture_output=True).returncode != 0:
+            print("  Error: configure failed")
+            return
+        r["configure_s"] = round(time.monotonic() - start, 2)
+        print(f"  make -j{cores}...")
+        start = time.monotonic()
+        if subprocess.run(["make", f"-j{cores}"], cwd=src, capture_output=True).returncode != 0:
+            print("  Error: make failed")
+            return
+        r["make_s"] = round(time.monotonic() - start, 2)
+        r["jobs"] = cores
+
+def summary_compile(results):
+    r = results["compile"]
+    print(f"CPython {CPYTHON_VERSION} build:")
+    print(f"  configure (serial):   {r.get('configure_s', 'N/A')} s")
+    print(f"  make -j{r.get('jobs', '?')}:".ljust(24) + f"{r.get('make_s', 'N/A')} s")
+
+# ---------------------------------------------------------------- ffmpeg
+
+def ffmpeg_deps():
+    return [] if shutil.which("ffmpeg") else ["ffmpeg"]
+
+def time_command(cmd):
+    start = time.monotonic()
+    out = run_command(cmd)
+    elapsed = time.monotonic() - start
+    return (elapsed, out) if out is not None else (None, None)
+
+def run_ffmpeg(cores, results):
+    results["ffmpeg"] = {}
+    frames = FFMPEG_SECONDS * FFMPEG_FPS
+    print("\nRunning ffmpeg software encodes...")
+    print("  Generating source clip (1080p, lossless)...")
+    gen = ["ffmpeg", "-v", "error", "-y", "-f", "lavfi",
+           "-i", f"testsrc2=size=1920x1080:rate={FFMPEG_FPS}:duration={FFMPEG_SECONDS}",
+           "-pix_fmt", "yuv420p", "-c:v", "ffv1", FFMPEG_SOURCE]
+    if run_command(gen) is None:
+        return
+    for codec in ("libx264", "libx265"):
+        for label, threads in [("single", 1), ("multi", cores)]:
+            print(f"  Encoding {codec} ({threads} thread(s))...")
+            # -threads must come after -i: before it, it only limits the (lossless) decoder.
+            # libx265 ignores -threads, so its thread pool is capped via x265-params.
+            extra = []
+            if codec == "libx265":
+                frame_threads = 1 if threads == 1 else 0
+                extra = ["-x265-params", f"log-level=error:pools={threads}:frame-threads={frame_threads}"]
+            cmd = ["ffmpeg", "-v", "error", "-y", "-i", FFMPEG_SOURCE,
+                   "-c:v", codec, "-preset", "medium", "-crf", "23", "-threads", str(threads),
+                   *extra, "-f", "null", "-"]
+            elapsed, _ = time_command(cmd)
+            results["ffmpeg"][f"{codec}_{label}"] = round(frames / elapsed, 2) if elapsed else None
+
+def summary_ffmpeg(results):
+    r = results["ffmpeg"]
+    print("ffmpeg software encode (1080p, preset medium, crf 23, FPS):")
+    for codec in ("libx264", "libx265"):
+        print(f"  {codec}:  Single: {r.get(codec + '_single') or 'N/A'} / Multi: {r.get(codec + '_multi') or 'N/A'}")
+
+# ---------------------------------------------------------------- podman
+
+def podman_deps():
+    if not shutil.which("podman"):
+        return ["podman"]
+    if subprocess.run(["podman", "info"], capture_output=True).returncode != 0:
+        return ["podman-running"]
+    return []
+
+def podman_run_script(script, volume=None):
+    cmd = ["podman", "run", "--rm", "--security-opt", "label=disable"]
+    if volume:
+        cmd += ["-v", f"{volume}:/mnt/bind"]
+    return run_command(cmd + [PODMAN_IMAGE, "sh", "-c", script])
+
+def run_podman(cores, results):
+    r = results["podman"] = {}
+    print("\nRunning podman benchmarks...")
+
+    print("  Preparing base image...")
+    if run_command(["podman", "pull", "-q", PODMAN_IMAGE]) is None:
+        return
+
+    print(f"  Startup latency ({PODMAN_STARTUP_RUNS} x `run --rm true`)...")
+    times = []
+    for _ in range(PODMAN_STARTUP_RUNS):
+        elapsed, _out = time_command(["podman", "run", "--rm", PODMAN_IMAGE, "true"])
+        if elapsed:
+            times.append(elapsed * 1000)
+    if times:
+        r["startup_ms_median"] = round(statistics.median(times), 1)
+        r["startup_ms_mean"] = round(statistics.mean(times), 1)
+
+    print(f"  Image pull + unpack ({PODMAN_PULL_IMAGE})...")
+    run_command(["podman", "rmi", "-f", PODMAN_PULL_IMAGE])
+    elapsed, _out = time_command(["podman", "pull", "-q", PODMAN_PULL_IMAGE])
+    r["pull_s"] = round(elapsed, 2) if elapsed else None
+
+    print("  Image build (no cache)...")
+    with tempfile.TemporaryDirectory(dir=os.getcwd()) as ctx:
+        with open(os.path.join(ctx, "Containerfile"), "w") as f:
+            f.write(f"FROM {PODMAN_IMAGE}\n"
+                    "RUN apk add --no-cache gcc musl-dev make\n"
+                    "RUN dd if=/dev/zero of=/blob bs=1M count=256 && sha256sum /blob\n")
+        elapsed, _out = time_command(["podman", "build", "-q", "--no-cache", "-t", PODMAN_BUILD_TAG, ctx])
+        r["build_s"] = round(elapsed, 2) if elapsed else None
+    run_command(["podman", "rmi", "-f", PODMAN_BUILD_TAG])
+
+    print("  In-container Sysbench CPU...")
+    out = podman_run_script("apk add -q --no-cache sysbench >/dev/null 2>&1 && "
+                            "n=$(nproc) && echo threads=$n && "
+                            "sysbench cpu --threads=1 run && sysbench cpu --threads=$n run")
+    if out:
+        eps = re.findall(r"events per second:\s+([\d.]+)", out)
+        threads = re.search(r"threads=(\d+)", out)
+        if len(eps) == 2:
+            r["cpu_single"], r["cpu_multi"] = eps
+            r["cpu_threads"] = threads.group(1) if threads else "?"
+
+    print(f"  Small-file I/O, bind mount vs container fs ({PODMAN_BIND_FILES} files)...")
+    with tempfile.TemporaryDirectory(dir=os.getcwd()) as bind_dir:
+        script = (
+            "now() { cut -d' ' -f1 /proc/uptime; }; "
+            "bench() { mkdir -p $1; s=$(now); i=0; "
+            f"while [ $i -lt {PODMAN_BIND_FILES} ]; do echo x > $1/f$i; i=$((i+1)); done; "
+            "cat $1/* >/dev/null; rm -rf $1; e=$(now); echo \"$2 $s $e\"; }; "
+            "bench /mnt/bind/t bind; bench /tmp/t local")
+        out = podman_run_script(script, volume=bind_dir)
+    if out:
+        for name, s, e in re.findall(r"^(bind|local) ([\d.]+) ([\d.]+)$", out, re.M):
+            r[f"smallfiles_{name}_s"] = round(float(e) - float(s), 2)
+
+def summary_podman(results):
+    r = results["podman"]
+    print("Podman:")
+    print(f"  Startup (run --rm true):  median {r.get('startup_ms_median', 'N/A')} ms / mean {r.get('startup_ms_mean', 'N/A')} ms")
+    print(f"  Image pull + unpack:      {r.get('pull_s', 'N/A')} s")
+    print(f"  Image build (no cache):   {r.get('build_s', 'N/A')} s")
+    print(f"  Sysbench CPU in container ({r.get('cpu_threads', '?')} cores): "
+          f"single {r.get('cpu_single', 'N/A')} / multi {r.get('cpu_multi', 'N/A')} events/s")
+    print(f"  Small files ({PODMAN_BIND_FILES}): bind mount {r.get('smallfiles_bind_s', 'N/A')} s / container fs {r.get('smallfiles_local_s', 'N/A')} s")
+
+# ---------------------------------------------------------------- sysbench / geekbench / fio
+
+def sysbench_deps():
+    return [] if shutil.which("sysbench") else ["sysbench"]
+
+def run_sysbench(cores, results):
+    print("Running Sysbench benchmarks...")
+    results["sysbench_cpu"] = {"single": run_sysbench_cpu(1), "multi": run_sysbench_cpu(cores)}
+    results["sysbench_mem"] = {"single": run_sysbench_mem(1), "multi": run_sysbench_mem(cores)}
+
+def summary_sysbench(results):
+    print(f"Sysbench CPU Single-Thread:   {results['sysbench_cpu']['single']} events/s")
+    print(f"Sysbench CPU Multi-Thread:    {results['sysbench_cpu']['multi']} events/s")
+    print(f"Sysbench Mem Single-Thread:   {results['sysbench_mem']['single']} MiB/s")
+    print(f"Sysbench Mem Multi-Thread:    {results['sysbench_mem']['multi']} MiB/s")
+
+def geekbench_deps():
+    if not GEEKBENCH_PATH or not os.path.exists(GEEKBENCH_PATH):
+        return ["geekbench"]
+    return []
+
+GPU_API = "Metal" if platform.system() == "Darwin" else "Vulkan"
+
+def run_geekbench(cores, results):
+    results["geekbench"] = {}
+    # Note: --no-upload and --export-json to prevent hanging
+    print("\nRunning Geekbench 6 CPU...")
+    run_command([GEEKBENCH_PATH, "--cpu", "--no-upload", "--export-json", GB_CPU_JSON])
+    if os.path.exists(GB_CPU_JSON):
+        with open(GB_CPU_JSON, 'r') as f:
+            gb_data = json.load(f)
+            results["geekbench"]["cpu_single"] = gb_data.get("score", 0)
+            # Geekbench JSON structure for multi-core varies, but 'score' is usually top-level for the run
+            # Actually, in GB6 JSON, it's often in 'sections' or top-level.
+            # If we want specific sub-scores, we parse them here.
+            results["geekbench"]["cpu_multi"] = gb_data.get("multicore_score", "See report")
+            # Re-reading: GB6 JSON has 'score' (single) and 'multicore_score'
+
+    print(f"Running Geekbench 6 GPU ({GPU_API})...")
+    run_command([GEEKBENCH_PATH, "--compute", GPU_API, "--no-upload", "--export-json", GB_GPU_JSON])
+    if os.path.exists(GB_GPU_JSON):
+        with open(GB_GPU_JSON, 'r') as f:
+            gb_gpu_data = json.load(f)
+            results["geekbench"]["gpu"] = gb_gpu_data.get("score", 0)
+
+def summary_geekbench(results):
+    gb = results["geekbench"]
+    print(f"Geekbench 6 CPU Single-Core:  {gb.get('cpu_single', 'N/A')}")
+    print(f"Geekbench 6 CPU Multi-Core:   {gb.get('cpu_multi', 'N/A')}")
+    print(f"Geekbench 6 GPU ({GPU_API}):{' '*(11-len(GPU_API))} {gb.get('gpu', 'N/A')}")
+
+def fio_deps():
+    return [] if shutil.which("fio") else ["fio"]
+
+def run_fio(cores, results):
+    fio_target = setup_fio_target(FIO_TEMP_FILE)
+    ioengine = "posixaio" if platform.system() == "Darwin" else "libaio"
+    print("\nRunning FIO (AmorphousDiskMark style)...")
+    fio_cmd = [
+        "fio", "--output-format=json", f"--filename={fio_target}", "--size=1G", "--runtime=30",
+        "--direct=1", "--group_reporting", f"--ioengine={ioengine}",
+        "--name=seq_q8t1_r", "--rw=read", "--bs=1M", "--iodepth=8",
+        "--name=seq_q8t1_w", "--stonewall", "--rw=write", "--bs=1M", "--iodepth=8",
+        "--name=seq_q1t1_r", "--stonewall", "--rw=read", "--bs=1M", "--iodepth=1",
+        "--name=seq_q1t1_w", "--stonewall", "--rw=write", "--bs=1M", "--iodepth=1",
+        "--name=rnd_q32t1_r", "--stonewall", "--rw=randread", "--bs=4k", "--iodepth=32",
+        "--name=rnd_q32t1_w", "--stonewall", "--rw=randwrite", "--bs=4k", "--iodepth=32",
+        "--name=rnd_q1t1_r", "--stonewall", "--rw=randread", "--bs=4k", "--iodepth=1",
+        "--name=rnd_q1t1_w", "--stonewall", "--rw=randwrite", "--bs=4k", "--iodepth=1"
+    ]
+    fio_out = run_command(fio_cmd)
+    if fio_out:
+        with open(FIO_JSON_FILE, 'w') as f:
+            f.write(fio_out)
+        results["fio"] = parse_fio_results()
+    else:
+        print("Warning: FIO produced no output.")
+        results["fio"] = {}
+
+def summary_fio(results):
+    fio = results["fio"]
+    print("FIO Disk (MiB/s):")
+    print(f"  Sequential (Q8T1):   Read: {fio.get('seq_q8t1_r', 0):.2f} / Write: {fio.get('seq_q8t1_w', 0):.2f}")
+    print(f"  Sequential (Q1T1):   Read: {fio.get('seq_q1t1_r', 0):.2f} / Write: {fio.get('seq_q1t1_w', 0):.2f}")
+    print(f"  Random 4K  (Q32T1):  Read: {fio.get('rnd_q32t1_r', 0):.2f} / Write: {fio.get('rnd_q32t1_w', 0):.2f}")
+    print(f"  Random 4K  (Q1T1):   Read: {fio.get('rnd_q1t1_r', 0):.2f} / Write: {fio.get('rnd_q1t1_w', 0):.2f}")
+
+# Package names per package manager. Dependencies with no entry for the detected
+# manager are reported with a manual hint instead.
+PACKAGES = {
+    "sysbench": {"apt": "sysbench", "dnf": "sysbench", "pacman": "sysbench", "brew": "sysbench"},
+    "fio":      {"apt": "fio", "dnf": "fio", "pacman": "fio", "brew": "fio"},
+    # Fedora/RHEL need RPM Fusion/EPEL for a full-featured ffmpeg (libx264/libx265)
+    "ffmpeg":   {"apt": "ffmpeg", "dnf": "ffmpeg", "pacman": "ffmpeg", "brew": "ffmpeg"},
+    "7zip":     {"apt": "7zip", "dnf": "7zip", "pacman": "7zip", "brew": "sevenzip"},
+    "podman":   {"apt": "podman", "dnf": "podman", "pacman": "podman", "brew": "podman"},
+    "compiler": {"apt": "build-essential", "dnf": "gcc make", "pacman": "base-devel"},
+}
+
+HINTS = {
+    "geekbench": "Geekbench 6 (not found; download from https://www.geekbench.com/download/ "
+                 "or put geekbench6 on your PATH)",
+    "podman-running": "podman is installed but not responding (macOS: `podman machine init` "
+                      "then `podman machine start`)",
+    "compiler": "C compiler and make (macOS: run `xcode-select --install`)",
+}
+
+INSTALL_COMMANDS = {
+    "apt": ["apt-get", "install", "-y"],
+    "dnf": ["dnf", "install", "-y"],
+    "pacman": ["pacman", "-S", "--noconfirm"],
+    "brew": ["brew", "install"],
+}
+
+def detect_package_manager():
+    order = ["brew", "apt-get", "dnf", "pacman"] if platform.system() == "Darwin" \
+        else ["apt-get", "dnf", "pacman", "brew"]
+    for cmd in order:
+        if shutil.which(cmd):
+            return "apt" if cmd == "apt-get" else cmd
+    return None
+
+def install_packages(manager, packages):
+    cmd = INSTALL_COMMANDS[manager] + packages
+    if manager != "brew" and os.geteuid() != 0:
+        cmd = ["sudo"] + cmd
+    print(f"  $ {' '.join(cmd)}")
+    return subprocess.run(cmd).returncode == 0   # inherits the terminal so sudo can prompt
+
+def resolve_dependencies(selected, install_mode):
+    """Return the unresolved dependency keys after (optionally) installing what we can."""
+    def find_missing():
+        return list(dict.fromkeys(m for s in selected for m in SUITES[s][0]()))
+
+    missing = find_missing()
+    if not missing:
+        return []
+    manager = detect_package_manager()
+    installable = {m: PACKAGES[m][manager].split() for m in missing
+                   if manager and m in PACKAGES and manager in PACKAGES[m]}
+    if installable and install_mode != "never":
+        packages = [p for pkgs in installable.values() for p in pkgs]
+        print(f"Missing: {', '.join(installable)}")
+        if install_mode == "always":
+            go = True
+        elif sys.stdin.isatty():
+            go = input(f"Install via {manager} ({' '.join(packages)})? [y/N] ").strip().lower() in ("y", "yes")
+        else:
+            go = False
+            print(f"Not interactive; re-run with --install or install manually: {' '.join(packages)}")
+        if go:
+            if not install_packages(manager, packages):
+                print("Warning: package installation reported a failure.")
+            missing = find_missing()
+    return missing
+
+def describe_missing(key):
+    return HINTS.get(key) or key
+
+# name -> (dependency check, runner, summary printer); dict order is run/print order
+SUITES = {
+    "sysbench":  (sysbench_deps,  run_sysbench,  summary_sysbench),
+    "geekbench": (geekbench_deps, run_geekbench, summary_geekbench),
+    "fio":       (fio_deps,       run_fio,       summary_fio),
+    "7zip":      (sevenzip_deps,  run_sevenzip,  summary_sevenzip),
+    "compile":   (compile_deps,   run_compile,   summary_compile),
+    "ffmpeg":    (ffmpeg_deps,    run_ffmpeg,    summary_ffmpeg),
+    "podman":    (podman_deps,    run_podman,    summary_podman),
+}
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Cross-platform (macOS/Linux) system benchmarks.")
+    parser.add_argument("--only", metavar="SUITE[,SUITE]", help="run only these suites (comma-separated)")
+    parser.add_argument("--skip", metavar="SUITE[,SUITE]", help="run everything except these suites")
+    parser.add_argument("--list", action="store_true", help="list available suites and exit")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--install", action="store_true",
+                       help="install missing dependencies via apt/dnf/pacman/brew without asking")
+    group.add_argument("--no-install", action="store_true", help="never offer to install missing dependencies")
+    args = parser.parse_args()
+    if args.list:
+        print("\n".join(SUITES))
+        sys.exit(0)
+    split = lambda s: [x.strip() for x in s.split(",") if x.strip()] if s else []
+    only, skip = split(args.only), split(args.skip)
+    unknown = [s for s in only + skip if s not in SUITES]
+    if unknown:
+        parser.error(f"unknown suite(s): {', '.join(unknown)} (choose from: {', '.join(SUITES)})")
+    selected = [s for s in SUITES if (not only or s in only) and s not in skip]
+    if not selected:
+        parser.error("no suites selected")
+    install_mode = "always" if args.install else "never" if args.no_install else "ask"
+    return selected, install_mode
+
 def main():
-    check_dependencies()
+    selected, install_mode = parse_args()
+    missing = resolve_dependencies(selected, install_mode)
+    if missing:
+        print(f"Error: Missing dependencies: {', '.join(describe_missing(m) for m in missing)}")
+        print("(use --skip to leave out suites you can't run)")
+        sys.exit(1)
+
     cores = get_logical_cores()
     sys_info = get_system_info()
     print("="*50)
@@ -147,95 +568,28 @@ def main():
     print(f"CPU:      {sys_info['cpu']}")
     print(f"Memory:   {sys_info['memory']}")
     print(f"Cores:    {cores} logical cores")
+    print(f"Suites:   {', '.join(selected)}")
     print("="*50)
     print("\nStarting benchmarks...\n")
 
-    results = {
-        "sysbench_cpu": {},
-        "sysbench_mem": {},
-        "geekbench": {},
-        "fio": {}
-    }
-
-    fio_target = setup_fio_target(FIO_TEMP_FILE)
-
+    results = {}
     try:
-        # --- Sysbench ---
-        print("Running Sysbench benchmarks...")
-        results["sysbench_cpu"]["single"] = run_sysbench_cpu(1)
-        results["sysbench_cpu"]["multi"] = run_sysbench_cpu(cores)
-        results["sysbench_mem"]["single"] = run_sysbench_mem(1)
-        results["sysbench_mem"]["multi"] = run_sysbench_mem(cores)
+        for name in selected:
+            SUITES[name][1](cores, results)
 
-        # --- Geekbench ---
-        # Note: --no-upload and --export-json to prevent hanging
-        print("\nRunning Geekbench 6 CPU...")
-        run_command([GEEKBENCH_PATH, "--cpu", "--no-upload", "--export-json", GB_CPU_JSON])
-        if os.path.exists(GB_CPU_JSON):
-            with open(GB_CPU_JSON, 'r') as f:
-                gb_data = json.load(f)
-                results["geekbench"]["cpu_single"] = gb_data.get("score", 0)
-                # Geekbench JSON structure for multi-core varies, but 'score' is usually top-level for the run
-                # Actually, in GB6 JSON, it's often in 'sections' or top-level.
-                # If we want specific sub-scores, we parse them here.
-                results["geekbench"]["cpu_multi"] = gb_data.get("multicore_score", "See report") 
-                # Re-reading: GB6 JSON has 'score' (single) and 'multicore_score'
-        
-        gpu_api = "Metal" if platform.system() == "Darwin" else "Vulkan"
-        print(f"Running Geekbench 6 GPU ({gpu_api})...")
-        run_command([GEEKBENCH_PATH, "--compute", gpu_api, "--no-upload", "--export-json", GB_GPU_JSON])
-        if os.path.exists(GB_GPU_JSON):
-            with open(GB_GPU_JSON, 'r') as f:
-                gb_gpu_data = json.load(f)
-                results["geekbench"]["gpu"] = gb_gpu_data.get("score", 0)
-
-        # --- FIO ---
-        ioengine = "posixaio" if platform.system() == "Darwin" else "libaio"
-        print("\nRunning FIO (AmorphousDiskMark style)...")
-        fio_cmd = [
-            "fio", "--output-format=json", f"--filename={fio_target}", "--size=1G", "--runtime=30", 
-            "--direct=1", "--group_reporting", f"--ioengine={ioengine}",
-            "--name=seq_q8t1_r", "--rw=read", "--bs=1M", "--iodepth=8",
-            "--name=seq_q8t1_w", "--stonewall", "--rw=write", "--bs=1M", "--iodepth=8",
-            "--name=seq_q1t1_r", "--stonewall", "--rw=read", "--bs=1M", "--iodepth=1",
-            "--name=seq_q1t1_w", "--stonewall", "--rw=write", "--bs=1M", "--iodepth=1",
-            "--name=rnd_q32t1_r", "--stonewall", "--rw=randread", "--bs=4k", "--iodepth=32",
-            "--name=rnd_q32t1_w", "--stonewall", "--rw=randwrite", "--bs=4k", "--iodepth=32",
-            "--name=rnd_q1t1_r", "--stonewall", "--rw=randread", "--bs=4k", "--iodepth=1",
-            "--name=rnd_q1t1_w", "--stonewall", "--rw=randwrite", "--bs=4k", "--iodepth=1"
-        ]
-        fio_out = run_command(fio_cmd)
-        if fio_out:
-            with open(FIO_JSON_FILE, 'w') as f:
-                f.write(fio_out)
-            results["fio"] = parse_fio_results()
-        else:
-            print("Warning: FIO produced no output.")
-            results["fio"] = {}
-
-        # --- Output Summary ---
         print("\n" + "="*50)
         print("                BENCHMARK RESULTS")
         print("="*50)
-        print(f"Geekbench 6 CPU Single-Core:  {results['geekbench'].get('cpu_single', 'N/A')}")
-        print(f"Geekbench 6 CPU Multi-Core:   {results['geekbench'].get('cpu_multi', 'N/A')}")
-        print(f"Geekbench 6 GPU ({gpu_api}):{' '*(11-len(gpu_api))} {results['geekbench'].get('gpu', 'N/A')}")
-        print("-" * 50)
-        print(f"Sysbench CPU Single-Thread:   {results['sysbench_cpu']['single']} events/s")
-        print(f"Sysbench CPU Multi-Thread:    {results['sysbench_cpu']['multi']} events/s")
-        print(f"Sysbench Mem Single-Thread:   {results['sysbench_mem']['single']} MiB/s")
-        print(f"Sysbench Mem Multi-Thread:    {results['sysbench_mem']['multi']} MiB/s")
-        print("-" * 50)
-        print("FIO Disk (MiB/s):")
-        print(f"  Sequential (Q8T1):   Read: {results['fio'].get('seq_q8t1_r', 0):.2f} / Write: {results['fio'].get('seq_q8t1_w', 0):.2f}")
-        print(f"  Sequential (Q1T1):   Read: {results['fio'].get('seq_q1t1_r', 0):.2f} / Write: {results['fio'].get('seq_q1t1_w', 0):.2f}")
-        print(f"  Random 4K  (Q32T1):  Read: {results['fio'].get('rnd_q32t1_r', 0):.2f} / Write: {results['fio'].get('rnd_q32t1_w', 0):.2f}")
-        print(f"  Random 4K  (Q1T1):   Read: {results['fio'].get('rnd_q1t1_r', 0):.2f} / Write: {results['fio'].get('rnd_q1t1_w', 0):.2f}")
+        for i, name in enumerate(selected):
+            if i:
+                print("-" * 50)
+            SUITES[name][2](results)
         print("="*50)
 
     finally:
         # Cleanup
-        for f in [fio_target, FIO_JSON_FILE, GB_CPU_JSON, GB_GPU_JSON]:
+        for f in [FIO_TEMP_FILE, os.path.join(FIO_NOCOW_DIR, FIO_TEMP_FILE), FIO_JSON_FILE,
+                  GB_CPU_JSON, GB_GPU_JSON, FFMPEG_SOURCE]:
             if os.path.exists(f):
                 os.remove(f)
         if os.path.exists(FIO_NOCOW_DIR):
