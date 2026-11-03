@@ -8,6 +8,7 @@ import platform
 import shutil
 import glob
 import argparse
+import shlex
 import datetime
 import socket
 import hashlib
@@ -373,14 +374,24 @@ def summary_podman(results):
 def sysbench_deps():
     return [] if shutil.which("sysbench") else ["sysbench"]
 
+# sysbench's cpu test reports absurd, non-comparable numbers on Apple Silicon
+# (https://github.com/akopytov/sysbench/issues/469), so don't collect them.
+SYSBENCH_CPU_BROKEN = platform.system() == "Darwin" and platform.machine() == "arm64"
+SYSBENCH_CPU_SKIPPED = "skipped (sysbench cpu is unreliable on Apple Silicon)"
+
 def run_sysbench(cores, results):
     print("Running Sysbench benchmarks...")
-    results["sysbench_cpu"] = {"single": run_sysbench_cpu(1), "multi": run_sysbench_cpu(cores)}
+    if SYSBENCH_CPU_BROKEN:
+        print("  Skipping Sysbench CPU: known-bad results on Apple Silicon (sysbench issue #469)")
+        results["sysbench_cpu"] = {"single": SYSBENCH_CPU_SKIPPED, "multi": SYSBENCH_CPU_SKIPPED}
+    else:
+        results["sysbench_cpu"] = {"single": run_sysbench_cpu(1), "multi": run_sysbench_cpu(cores)}
     results["sysbench_mem"] = {"single": run_sysbench_mem(1), "multi": run_sysbench_mem(cores)}
 
 def summary_sysbench(results):
-    print(f"Sysbench CPU Single-Thread:   {results['sysbench_cpu']['single']} events/s")
-    print(f"Sysbench CPU Multi-Thread:    {results['sysbench_cpu']['multi']} events/s")
+    unit = lambda v, u: f"{v} {u}" if SYSBENCH_CPU_SKIPPED != v else v
+    print(f"Sysbench CPU Single-Thread:   {unit(results['sysbench_cpu']['single'], 'events/s')}")
+    print(f"Sysbench CPU Multi-Thread:    {unit(results['sysbench_cpu']['multi'], 'events/s')}")
     print(f"Sysbench Mem Single-Thread:   {results['sysbench_mem']['single']} MiB/s")
     print(f"Sysbench Mem Multi-Thread:    {results['sysbench_mem']['multi']} MiB/s")
 
@@ -526,6 +537,112 @@ def resolve_dependencies(selected, install_mode):
             missing = find_missing()
     return missing
 
+# ---------------------------------------------------------------- environment
+
+def get_filesystem_info(path):
+    """Filesystem the tests run on (fio file, compile dir and podman bind mounts all live here)."""
+    info = {"test_directory": os.path.abspath(path)}
+    try:
+        usage = shutil.disk_usage(path)
+        info["total_gb"] = round(usage.total / 1024**3, 1)
+        info["free_gb"] = round(usage.free / 1024**3, 1)
+        if platform.system() == "Linux" and shutil.which("findmnt"):
+            out = run_command(["findmnt", "-n", "-P", "-T", path, "-o", "TARGET,SOURCE,FSTYPE,OPTIONS"])
+            fields = dict(tok.split("=", 1) for tok in shlex.split(out or "") if "=" in tok)
+            info.update({"mountpoint": fields.get("TARGET"), "device": fields.get("SOURCE"),
+                         "fstype": fields.get("FSTYPE"), "mount_options": fields.get("OPTIONS")})
+        else:
+            df = (run_command(["df", "-P", path]) or "").strip().splitlines()
+            if len(df) > 1:
+                parts = df[-1].split()
+                info["device"], info["mountpoint"] = parts[0], " ".join(parts[5:])
+                for line in (run_command(["mount"]) or "").splitlines():
+                    m = re.match(r"^(\S+) on (.+) \(([^)]*)\)$", line)
+                    if m and m.group(2) == info["mountpoint"]:
+                        opts = [o.strip() for o in m.group(3).split(",")]
+                        info["fstype"], info["mount_options"] = opts[0], ",".join(opts[1:])
+                        break
+    except Exception as e:
+        info["error"] = str(e)
+    return info
+
+def read_file(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+def get_power_state():
+    """Snapshot of power/thermal settings that affect benchmark results."""
+    state = {}
+    try:
+        if platform.system() == "Linux":
+            supplies = []
+            for d in glob.glob("/sys/class/power_supply/*"):
+                kind = read_file(os.path.join(d, "type"))
+                if kind == "Battery":
+                    supplies.append({"battery": True, "percent": read_file(os.path.join(d, "capacity")),
+                                     "status": read_file(os.path.join(d, "status"))})
+                elif kind in ("Mains", "USB"):
+                    supplies.append({"mains": kind, "online": read_file(os.path.join(d, "online")) == "1"})
+            if supplies:
+                state["on_ac"] = any(x.get("online") for x in supplies if "mains" in x)
+                batt = [x for x in supplies if x.get("battery")]
+                if batt:
+                    state["battery_percent"], state["battery_status"] = batt[0]["percent"], batt[0]["status"]
+            cpu = "/sys/devices/system/cpu"
+            state["cpu_governor"] = read_file(f"{cpu}/cpu0/cpufreq/scaling_governor")
+            state["cpu_epp"] = read_file(f"{cpu}/cpu0/cpufreq/energy_performance_preference")
+            state["cpu_cur_mhz"] = (lambda v: round(int(v) / 1000) if v else None)(read_file(f"{cpu}/cpu0/cpufreq/scaling_cur_freq"))
+            state["turbo_disabled"] = {"1": True, "0": False}.get(read_file(f"{cpu}/intel_pstate/no_turbo"))
+            if shutil.which("powerprofilesctl"):
+                state["power_profile"] = (run_command(["powerprofilesctl", "get"]) or "").strip() or None
+        elif platform.system() == "Darwin":
+            batt = run_command(["pmset", "-g", "batt"]) or ""
+            m = re.search(r"Now drawing from '([^']+)'", batt)
+            if m:
+                state["power_source"] = m.group(1)
+                state["on_ac"] = m.group(1) == "AC Power"
+            m = re.search(r"(\d+)%;\s*([^;]+);", batt)
+            if m:
+                state["battery_percent"], state["battery_status"] = m.group(1), m.group(2).strip()
+            settings = run_command(["pmset", "-g"]) or ""
+            for key in ("lowpowermode", "powermode", "highpowermode"):
+                m = re.search(rf"^\s*{key}\s+(\d+)", settings, re.M)
+                if m:
+                    state[key] = int(m.group(1))
+            therm = run_command(["pmset", "-g", "therm"]) or ""
+            m = re.search(r"CPU_Speed_Limit\s*=\s*(\d+)", therm)
+            if m:
+                state["cpu_speed_limit_pct"] = int(m.group(1))
+    except Exception as e:
+        state["error"] = str(e)
+    return {k: v for k, v in state.items() if v is not None}
+
+def check_sanity(results):
+    """Flag results that look wrong, so they aren't trusted blindly later."""
+    warnings = []
+    for suite in ("sysbench_cpu", "sysbench_mem", "7zip"):
+        r = results.get(suite, {})
+        try:
+            if float(r["multi"]) < float(r["single"]):
+                warnings.append(f"{suite}: multi-thread ({r['multi']}) is lower than single-thread ({r['single']})")
+        except (KeyError, TypeError, ValueError):
+            pass
+    return warnings
+
+def describe_power(state):
+    bits = []
+    if "on_ac" in state:
+        bits.append("AC power" if state["on_ac"] else "BATTERY")
+    for key in ("power_profile", "cpu_governor"):
+        if state.get(key):
+            bits.append(state[key])
+    if state.get("lowpowermode"):
+        bits.append("Low Power Mode ON")
+    return ", ".join(bits) or "unknown"
+
 TOOL_VERSION_COMMANDS = {
     "sysbench": ["sysbench", "--version"],
     "fio": ["fio", "--version"],
@@ -549,7 +666,7 @@ def get_tool_versions(selected):
         versions["geekbench"] = GEEKBENCH_PATH
     return versions
 
-def save_results(output_dir, selected, cores, sys_info, results):
+def save_results(output_dir, selected, cores, sys_info, results, environment, warnings):
     now = datetime.datetime.now().astimezone()
     host = socket.gethostname().split(".")[0]
     record = {
@@ -565,6 +682,8 @@ def save_results(output_dir, selected, cores, sys_info, results):
             "logical_cores": cores,
         },
         "suites": selected,
+        "environment": environment,
+        "warnings": warnings,
         "tool_versions": get_tool_versions(selected),
         "test_config": {
             "cpython_version": CPYTHON_VERSION,
@@ -653,10 +772,17 @@ def main():
     print(f"Memory:   {sys_info['memory']}")
     print(f"Cores:    {cores} logical cores")
     print(f"Suites:   {', '.join(selected)}")
+    fs_info = get_filesystem_info(os.getcwd())
+    power_start = get_power_state()
+    print(f"Test dir: {fs_info['test_directory']} ({fs_info.get('fstype', '?')} on {fs_info.get('device', '?')})")
+    print(f"Power:    {describe_power(power_start)}")
+    if power_start.get("on_ac") is False:
+        print("Warning:  running on battery; results will be lower and less comparable.")
     print("="*50)
     print("\nStarting benchmarks...\n")
 
     results = {}
+    warnings = []
     try:
         for name in selected:
             SUITES[name][1](cores, results)
@@ -668,11 +794,15 @@ def main():
             if i:
                 print("-" * 50)
             SUITES[name][2](results)
+        warnings = check_sanity(results)
+        for w in warnings:
+            print(f"WARNING: {w}")
         print("="*50)
 
     finally:
         if output_dir and results:
-            print(f"\nResults saved to: {save_results(output_dir, selected, cores, sys_info, results)}")
+            environment = {"filesystem": fs_info, "power_start": power_start, "power_end": get_power_state()}
+            print(f"\nResults saved to: {save_results(output_dir, selected, cores, sys_info, results, environment, warnings)}")
         # Cleanup
         for f in [FIO_TEMP_FILE, os.path.join(FIO_NOCOW_DIR, FIO_TEMP_FILE), FIO_JSON_FILE,
                   GB_CPU_JSON, GB_GPU_JSON, FFMPEG_SOURCE]:
