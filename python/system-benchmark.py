@@ -8,6 +8,8 @@ import platform
 import shutil
 import glob
 import argparse
+import datetime
+import socket
 import hashlib
 import tarfile
 import urllib.request
@@ -515,6 +517,69 @@ def resolve_dependencies(selected, install_mode):
             missing = find_missing()
     return missing
 
+TOOL_VERSION_COMMANDS = {
+    "sysbench": ["sysbench", "--version"],
+    "fio": ["fio", "--version"],
+    "ffmpeg": ["ffmpeg", "-version"],
+    "podman": ["podman", "--version"],
+    "compile": ["cc", "--version"],
+}
+
+def get_tool_versions(selected):
+    versions = {}
+    for suite, cmd in TOOL_VERSION_COMMANDS.items():
+        if suite in selected and shutil.which(cmd[0]):
+            out = run_command(cmd)
+            if out:
+                versions[suite] = out.splitlines()[0].strip()
+    if "7zip" in selected and find_7z():
+        out = run_command([find_7z()]) or ""
+        match = re.search(r"7-Zip[^\n]*", out)
+        versions["7zip"] = match.group(0).strip() if match else find_7z()
+    if "geekbench" in selected and GEEKBENCH_PATH:
+        versions["geekbench"] = GEEKBENCH_PATH
+    return versions
+
+def save_results(output_dir, selected, cores, sys_info, results):
+    now = datetime.datetime.now().astimezone()
+    host = socket.gethostname().split(".")[0]
+    record = {
+        "timestamp": now.isoformat(timespec="seconds"),
+        "hostname": host,
+        "system": {
+            "os": platform.system(),
+            "os_release": platform.release(),
+            "os_version": platform.version(),
+            "arch": platform.machine(),
+            "cpu": sys_info["cpu"],
+            "memory": sys_info["memory"],
+            "logical_cores": cores,
+        },
+        "suites": selected,
+        "tool_versions": get_tool_versions(selected),
+        "test_config": {
+            "cpython_version": CPYTHON_VERSION,
+            "podman_image": PODMAN_IMAGE,
+            "podman_pull_image": PODMAN_PULL_IMAGE,
+            "podman_startup_runs": PODMAN_STARTUP_RUNS,
+            "podman_bind_files": PODMAN_BIND_FILES,
+            "ffmpeg_clip": f"1080p {FFMPEG_FPS}fps {FFMPEG_SECONDS}s testsrc2",
+        },
+        "units": {
+            "sysbench_cpu": "events/s", "sysbench_mem": "MiB/s", "fio": "MiB/s",
+            "7zip": "MIPS", "ffmpeg": "FPS", "compile": "seconds",
+            "podman": "*_ms milliseconds, *_s seconds, cpu_* events/s",
+            "geekbench": "score",
+        },
+        "results": results,
+    }
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, f"{host}_{now.strftime('%Y%m%d-%H%M%S')}.json")
+    with open(path, "w") as f:
+        json.dump(record, f, indent=2)
+        f.write("\n")
+    return path
+
 def describe_missing(key):
     return HINTS.get(key) or key
 
@@ -534,6 +599,9 @@ def parse_args():
     parser.add_argument("--only", metavar="SUITE[,SUITE]", help="run only these suites (comma-separated)")
     parser.add_argument("--skip", metavar="SUITE[,SUITE]", help="run everything except these suites")
     parser.add_argument("--list", action="store_true", help="list available suites and exit")
+    parser.add_argument("--output-dir", default="results", metavar="DIR",
+                        help="where to save the JSON results file (default: ./results)")
+    parser.add_argument("--no-save", action="store_true", help="don't write a results file")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--install", action="store_true",
                        help="install missing dependencies via apt/dnf/pacman/brew without asking")
@@ -551,10 +619,11 @@ def parse_args():
     if not selected:
         parser.error("no suites selected")
     install_mode = "always" if args.install else "never" if args.no_install else "ask"
-    return selected, install_mode
+    output_dir = None if args.no_save else args.output_dir
+    return selected, install_mode, output_dir
 
 def main():
-    selected, install_mode = parse_args()
+    selected, install_mode, output_dir = parse_args()
     missing = resolve_dependencies(selected, install_mode)
     if missing:
         print(f"Error: Missing dependencies: {', '.join(describe_missing(m) for m in missing)}")
@@ -587,6 +656,8 @@ def main():
         print("="*50)
 
     finally:
+        if output_dir and results:
+            print(f"\nResults saved to: {save_results(output_dir, selected, cores, sys_info, results)}")
         # Cleanup
         for f in [FIO_TEMP_FILE, os.path.join(FIO_NOCOW_DIR, FIO_TEMP_FILE), FIO_JSON_FILE,
                   GB_CPU_JSON, GB_GPU_JSON, FFMPEG_SOURCE]:
