@@ -185,6 +185,41 @@ def summary_sevenzip(results):
     print(f"7-Zip Single-Thread:          {results['7zip']['single']} MIPS")
     print(f"7-Zip Multi-Thread:           {results['7zip']['multi']} MIPS")
 
+# ---------------------------------------------------------------- openssl
+
+OPENSSL_ALGORITHMS = ("sha256", "aes-256-cbc")
+
+def openssl_deps():
+    return [] if shutil.which("openssl") else ["openssl"]
+
+def run_openssl_speed(algorithm, procs):
+    cmd = ["openssl", "speed", "-evp", algorithm]
+    if procs > 1:
+        cmd += ["-multi", str(procs)]
+    out = run_command(cmd)
+    if not out:
+        return None
+    # Last column is the largest block size, in 1000s of bytes/second
+    for line in out.splitlines():
+        parts = line.split()
+        if parts and parts[0].lower() == algorithm and parts[-1].endswith("k"):
+            return round(float(parts[-1][:-1]) / 1000, 1)   # MB/s
+    return None
+
+def run_openssl(cores, results):
+    print("\nRunning openssl speed...")
+    r = results["openssl"] = {}
+    for algorithm in OPENSSL_ALGORITHMS:
+        for label, procs in [("single", 1), ("multi", cores)]:
+            print(f"  openssl speed {algorithm} ({procs} process(es))...")
+            r[f"{algorithm}_{label}"] = run_openssl_speed(algorithm, procs)
+
+def summary_openssl(results):
+    r = results["openssl"]
+    print("OpenSSL (16 KiB blocks, MB/s):")
+    for algorithm in OPENSSL_ALGORITHMS:
+        print(f"  {algorithm}:".ljust(16) + f"Single: {r.get(algorithm + '_single') or 'N/A'} / Multi: {r.get(algorithm + '_multi') or 'N/A'}")
+
 # ---------------------------------------------------------------- compile
 
 def compile_deps():
@@ -237,6 +272,222 @@ def summary_compile(results):
     print(f"CPython {CPYTHON_VERSION} build:")
     print(f"  configure (serial):   {r.get('configure_s', 'N/A')} s")
     print(f"  make -j{r.get('jobs', '?')}:".ljust(24) + f"{r.get('make_s', 'N/A')} s")
+
+# ---------------------------------------------------------------- cpumem (synthetic CPU + memory)
+
+# Small C program compiled at run time so the same code runs on macOS and Linux.
+# int/flt use 8 independent dependency chains per thread: they measure sustained
+# dependent-op throughput (comparable between machines), not theoretical peak FLOPS.
+CPUMEM_SOURCE = r'''/* Synthetic CPU/memory microbenchmarks. Usage: cpumem <mem|lat|int|flt> <threads> */
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <pthread.h>
+#include <time.h>
+
+#define MAX_THREADS 256
+#define REPS 5
+
+static double now(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t.tv_sec + t.tv_nsec * 1e-9;
+}
+
+static int nthreads = 1;
+
+/* Run fn on nthreads threads, return wall seconds */
+typedef struct { int id; } targ;
+static double run_threads(void *(*fn)(void *)) {
+    pthread_t th[MAX_THREADS];
+    targ args[MAX_THREADS];
+    double start = now();
+    for (int i = 0; i < nthreads; i++) {
+        args[i].id = i;
+        pthread_create(&th[i], NULL, fn, &args[i]);
+    }
+    for (int i = 0; i < nthreads; i++) pthread_join(th[i], NULL);
+    return now() - start;
+}
+
+/* ---------------- memory bandwidth (STREAM-style) ---------------- */
+#define N ((size_t)32 * 1024 * 1024)   /* doubles per array: 256 MiB each */
+static double *a, *b, *c;
+static int kernel;
+
+static void *mem_worker(void *p) {
+    int id = ((targ *)p)->id;
+    size_t lo = N * id / nthreads, hi = N * (id + 1) / nthreads;
+    double *restrict A = a, *restrict B = b, *restrict C = c;
+    const double s = 3.0;
+    switch (kernel) {
+    case 0: for (size_t i = lo; i < hi; i++) { A[i] = 1.0; B[i] = 2.0; C[i] = 0.0; } break;
+    case 1: for (size_t i = lo; i < hi; i++) C[i] = A[i]; break;
+    case 2: for (size_t i = lo; i < hi; i++) B[i] = s * C[i]; break;
+    case 3: for (size_t i = lo; i < hi; i++) C[i] = A[i] + B[i]; break;
+    case 4: for (size_t i = lo; i < hi; i++) A[i] = B[i] + s * C[i]; break;
+    }
+    return NULL;
+}
+
+static int bench_mem(void) {
+    a = malloc(N * sizeof(double)); b = malloc(N * sizeof(double)); c = malloc(N * sizeof(double));
+    if (!a || !b || !c) { fprintf(stderr, "out of memory\n"); return 1; }
+    kernel = 0; run_threads(mem_worker);          /* first-touch in the threads that use it */
+    const char *names[] = { "", "copy", "scale", "add", "triad" };
+    const double bytes[] = { 0, 16.0 * N, 16.0 * N, 24.0 * N, 24.0 * N };
+    for (kernel = 1; kernel <= 4; kernel++) {
+        double best = 1e30;
+        for (int r = 0; r < REPS; r++) { double t = run_threads(mem_worker); if (t < best) best = t; }
+        printf("%s %.2f\n", names[kernel], bytes[kernel] / best / 1e9);
+    }
+    return 0;
+}
+
+/* ---------------- memory latency (pointer chase) ---------------- */
+static uint64_t rng_state = 88172645463325252ULL;
+static uint64_t rng(void) {
+    rng_state ^= rng_state << 13; rng_state ^= rng_state >> 7; rng_state ^= rng_state << 17;
+    return rng_state;
+}
+static volatile uint64_t sink;
+
+static void bench_lat_one(const char *label, size_t bytes, size_t steps) {
+    size_t n = bytes / 64;                         /* one node per cache line */
+    uint64_t *buf;
+    if (posix_memalign((void **)&buf, 64, n * 64)) { fprintf(stderr, "out of memory\n"); exit(1); }
+    for (size_t i = 0; i < n; i++) buf[i * 8] = i;
+    for (size_t i = n - 1; i > 0; i--) {           /* Sattolo: single random cycle */
+        size_t j = rng() % i;
+        uint64_t t = buf[i * 8]; buf[i * 8] = buf[j * 8]; buf[j * 8] = t;
+    }
+    uint64_t idx = 0;
+    for (size_t i = 0; i < steps / 10; i++) idx = buf[idx * 8];     /* warm up */
+    double best = 1e30;
+    for (int r = 0; r < 3; r++) {
+        double start = now();
+        for (size_t i = 0; i < steps; i++) idx = buf[idx * 8];
+        double t = now() - start;
+        if (t < best) best = t;
+    }
+    sink = idx;
+    printf("lat_%s %.2f\n", label, best / steps * 1e9);
+    free(buf);
+}
+
+static int bench_lat(void) {
+    bench_lat_one("32KiB", 32 * 1024, 50000000);
+    bench_lat_one("1MiB", 1024 * 1024, 50000000);
+    bench_lat_one("16MiB", 16 * 1024 * 1024, 20000000);
+    bench_lat_one("512MiB", 512 * 1024 * 1024, 10000000);
+    return 0;
+}
+
+/* ---------------- raw integer / floating point throughput ---------------- */
+#define ITERS 200000000ULL
+static volatile uint64_t isinks[MAX_THREADS];
+static volatile double fsinks[MAX_THREADS];
+
+static void *int_worker(void *p) {
+    int id = ((targ *)p)->id;
+    uint64_t x0 = 1, x1 = 2, x2 = 3, x3 = 4, x4 = 5, x5 = 6, x6 = 7, x7 = 8;
+    const uint64_t m = 6364136223846793005ULL;
+    for (uint64_t i = 0; i < ITERS; i++) {         /* 8 independent dependency chains */
+        x0 = x0 * m + 1; x1 = x1 * m + 3; x2 = x2 * m + 5; x3 = x3 * m + 7;
+        x4 = x4 * m + 9; x5 = x5 * m + 11; x6 = x6 * m + 13; x7 = x7 * m + 15;
+    }
+    isinks[id] = x0 ^ x1 ^ x2 ^ x3 ^ x4 ^ x5 ^ x6 ^ x7;
+    return NULL;
+}
+
+static void *flt_worker(void *p) {
+    int id = ((targ *)p)->id;
+    double x0 = .1, x1 = .2, x2 = .3, x3 = .4, x4 = .5, x5 = .6, x6 = .7, x7 = .8;
+    const double m = 0.999999;
+    for (uint64_t i = 0; i < ITERS; i++) {
+        x0 = x0 * m + 1e-6; x1 = x1 * m + 2e-6; x2 = x2 * m + 3e-6; x3 = x3 * m + 4e-6;
+        x4 = x4 * m + 5e-6; x5 = x5 * m + 6e-6; x6 = x6 * m + 7e-6; x7 = x7 * m + 8e-6;
+    }
+    fsinks[id] = x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7;
+    return NULL;
+}
+
+static int bench_cpu(int is_int) {
+    double best = 1e30;
+    for (int r = 0; r < 3; r++) {
+        double t = run_threads(is_int ? int_worker : flt_worker);
+        if (t < best) best = t;
+    }
+    double updates = (double)ITERS * 8 * nthreads;
+    /* int: billions of multiply-add updates/s; flt: GFLOPS (mul+add = 2 flops) */
+    printf("%s %.2f\n", is_int ? "int_gops" : "flt_gflops", updates * (is_int ? 1 : 2) / best / 1e9);
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc < 3) { fprintf(stderr, "usage: %s <mem|lat|int|flt> <threads>\n", argv[0]); return 2; }
+    nthreads = atoi(argv[2]);
+    if (nthreads < 1 || nthreads > MAX_THREADS) { fprintf(stderr, "bad thread count\n"); return 2; }
+    if (!strcmp(argv[1], "mem")) return bench_mem();
+    if (!strcmp(argv[1], "lat")) return bench_lat();
+    if (!strcmp(argv[1], "int")) return bench_cpu(1);
+    if (!strcmp(argv[1], "flt")) return bench_cpu(0);
+    return 2;
+}
+'''
+
+def cpumem_deps():
+    return compile_deps()
+
+def run_cpumem_mode(exe, mode, threads):
+    out = run_command([exe, mode, str(threads)])
+    values = {}
+    for line in (out or "").splitlines():
+        parts = line.split()
+        if len(parts) == 2:
+            try:
+                values[parts[0]] = float(parts[1])
+            except ValueError:
+                pass
+    return values
+
+def run_cpumem(cores, results):
+    print("\nRunning synthetic CPU/memory benchmarks...")
+    r = results["cpumem"] = {}
+    with tempfile.TemporaryDirectory(dir=os.getcwd()) as build_dir:
+        src, exe = os.path.join(build_dir, "cpumem.c"), os.path.join(build_dir, "cpumem")
+        with open(src, "w") as f:
+            f.write(CPUMEM_SOURCE)
+        print("  Compiling...")
+        if run_command(["cc", "-O3", "-pthread", "-o", exe, src]) is None and not os.path.exists(exe):
+            return
+        bandwidth = {}
+        for label, threads in [("single", 1), ("multi", cores)]:
+            print(f"  Memory bandwidth ({threads} thread(s))...")
+            for k, v in run_cpumem_mode(exe, "mem", threads).items():
+                bandwidth[f"{k}_{label}"] = v
+        r["bandwidth_gbs"] = bandwidth
+        print("  Memory latency (pointer chase)...")
+        r["latency_ns"] = {k.removeprefix("lat_"): v for k, v in run_cpumem_mode(exe, "lat", 1).items()}
+        for mode, key in [("int", "int_gops"), ("flt", "flt_gflops")]:
+            r[key] = {}
+            for label, threads in [("single", 1), ("multi", cores)]:
+                print(f"  {'Integer' if mode == 'int' else 'Floating point'} throughput ({threads} thread(s))...")
+                r[key][label] = run_cpumem_mode(exe, mode, threads).get(key)
+
+def summary_cpumem(results):
+    r = results["cpumem"]
+    bw, lat = r.get("bandwidth_gbs", {}), r.get("latency_ns", {})
+    print("Memory bandwidth (GB/s, single / multi):")
+    for k in ("copy", "scale", "add", "triad"):
+        print(f"  {k}:".ljust(10) + f"{bw.get(k + '_single', 'N/A')} / {bw.get(k + '_multi', 'N/A')}")
+    print("Memory latency (ns, random pointer chase):")
+    print("  " + "  ".join(f"{k}: {v}" for k, v in lat.items()))
+    i, f = r.get("int_gops", {}), r.get("flt_gflops", {})
+    print(f"Integer (G updates/s):  Single: {i.get('single', 'N/A')} / Multi: {i.get('multi', 'N/A')}")
+    print(f"Float   (GFLOPS):       Single: {f.get('single', 'N/A')} / Multi: {f.get('multi', 'N/A')}")
 
 # ---------------------------------------------------------------- ffmpeg
 
@@ -470,6 +721,7 @@ def summary_fio(results):
 # manager are reported with a manual hint instead.
 PACKAGES = {
     "sysbench": {"apt": "sysbench", "dnf": "sysbench", "pacman": "sysbench", "brew": "sysbench"},
+    "openssl":  {"apt": "openssl", "dnf": "openssl", "pacman": "openssl", "brew": "openssl"},
     "fio":      {"apt": "fio", "dnf": "fio", "pacman": "fio", "brew": "fio"},
     # Fedora/RHEL need RPM Fusion/EPEL for a full-featured ffmpeg (libx264/libx265)
     "ffmpeg":   {"apt": "ffmpeg", "dnf": "ffmpeg", "pacman": "ffmpeg", "brew": "ffmpeg"},
@@ -630,6 +882,14 @@ def check_sanity(results):
                 warnings.append(f"{suite}: multi-thread ({r['multi']}) is lower than single-thread ({r['single']})")
         except (KeyError, TypeError, ValueError):
             pass
+    cpumem = results.get("cpumem", {})
+    for key in ("int_gops", "flt_gflops"):
+        r = cpumem.get(key, {})
+        try:
+            if r["multi"] < r["single"]:
+                warnings.append(f"cpumem.{key}: multi-thread ({r['multi']}) is lower than single-thread ({r['single']})")
+        except (KeyError, TypeError):
+            pass
     return warnings
 
 def describe_power(state):
@@ -649,6 +909,7 @@ TOOL_VERSION_COMMANDS = {
     "ffmpeg": ["ffmpeg", "-version"],
     "podman": ["podman", "--version"],
     "compile": ["cc", "--version"],
+    "openssl": ["openssl", "version"],
 }
 
 def get_tool_versions(selected):
@@ -695,7 +956,8 @@ def save_results(output_dir, selected, cores, sys_info, results, environment, wa
         },
         "units": {
             "sysbench_cpu": "events/s", "sysbench_mem": "MiB/s", "fio": "MiB/s",
-            "7zip": "MIPS", "ffmpeg": "FPS", "compile": "seconds",
+            "7zip": "MIPS", "openssl": "MB/s", "ffmpeg": "FPS",
+            "cpumem": "bandwidth_gbs GB/s, latency_ns ns, int_gops G updates/s, flt_gflops GFLOPS", "compile": "seconds",
             "podman": "*_ms milliseconds, *_s seconds, cpu_* events/s",
             "geekbench": "score",
         },
@@ -717,13 +979,15 @@ SUITES = {
     "geekbench": (geekbench_deps, run_geekbench, summary_geekbench),
     "fio":       (fio_deps,       run_fio,       summary_fio),
     "7zip":      (sevenzip_deps,  run_sevenzip,  summary_sevenzip),
+    "openssl":   (openssl_deps,   run_openssl,   summary_openssl),
+    "cpumem":    (cpumem_deps,    run_cpumem,    summary_cpumem),
     "compile":   (compile_deps,   run_compile,   summary_compile),
     "ffmpeg":    (ffmpeg_deps,    run_ffmpeg,    summary_ffmpeg),
     "podman":    (podman_deps,    run_podman,    summary_podman),
 }
 
 # Suites that only run when explicitly requested (--only or --with)
-OPT_IN = {"geekbench"}
+OPT_IN = {"geekbench", "sysbench"}
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Cross-platform (macOS/Linux) system benchmarks.")
